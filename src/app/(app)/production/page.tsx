@@ -190,43 +190,48 @@ function buildRawConsumptionRows(
   });
 
   plannedByRawSku.forEach((plannedRawQty, rawSkuId) => {
-    let remaining = plannedRawQty;
+    let bomRemaining = plannedRawQty;
     const skuBatches = rawBatches
       .filter((batch) => batch.skuId === rawSkuId && batch.quantityRemaining > 0)
       .sort((a, b) => new Date(a.receivedAt).getTime() - new Date(b.receivedAt).getTime());
 
     if (!skuBatches.length) {
+      // No batches available — show BOM qty as reference, actual qty as 0
       rows.push({
         rawSkuId,
         batchId: "",
         bomQty: plannedRawQty ? plannedRawQty.toString() : "",
-        quantity: plannedRawQty ? plannedRawQty.toString() : ""
+        quantity: "0"
       });
       return;
     }
 
+    // Allocate across batches using FIFO, cap actual at available stock
     skuBatches.forEach((batch) => {
-      if (remaining <= 0) return;
+      if (bomRemaining <= 0) return;
       const batchRemaining = batchRemainingById.get(batch.id) ?? batch.quantityRemaining;
       if (batchRemaining <= 0) return;
-      const take = Math.min(remaining, batchRemaining);
-      if (take <= 0) return;
+      const bomPortion = Math.min(bomRemaining, batchRemaining);
+      // Actual qty is capped at what the batch actually has
+      const actualTake = Math.min(bomPortion, batchRemaining);
+      if (actualTake <= 0) return;
       rows.push({
         rawSkuId,
         batchId: batch.id,
-        bomQty: take.toString(),
-        quantity: take.toString()
+        bomQty: bomPortion.toString(),
+        quantity: actualTake.toString()
       });
-      remaining -= take;
-      batchRemainingById.set(batch.id, Math.max(batchRemaining - take, 0));
+      bomRemaining -= bomPortion;
+      batchRemainingById.set(batch.id, Math.max(batchRemaining - actualTake, 0));
     });
 
-    if (remaining > 0) {
+    if (bomRemaining > 0) {
+      // BOM expects more than available stock — show shortfall with qty 0
       rows.push({
         rawSkuId,
         batchId: "",
-        bomQty: remaining.toString(),
-        quantity: remaining.toString()
+        bomQty: bomRemaining.toString(),
+        quantity: "0"
       });
     }
   });
@@ -551,16 +556,54 @@ export default function ProductionPage() {
       actualByRawSku.set(row.rawSkuId, (actualByRawSku.get(row.rawSkuId) ?? 0) + qty);
     });
 
+    // Show variance as informational, not as a blocking error
+    const variances: string[] = [];
     const allSkuIds = new Set<string>([...expectedByRawSku.keys(), ...actualByRawSku.keys()]);
     for (const rawSkuId of allSkuIds) {
       const expected = expectedByRawSku.get(rawSkuId) ?? 0;
       const actual = actualByRawSku.get(rawSkuId) ?? 0;
       if (Math.abs(expected - actual) > 0.0001) {
         const sku = rawSkuMap.get(rawSkuId);
-        return `${sku?.code ?? "Raw SKU"} must total ${expected.toFixed(3)} based on output ${closeTotalQty}, but current raw entries total ${actual.toFixed(3)}.`;
+        const variancePct = expected > 0 ? (((actual - expected) / expected) * 100).toFixed(1) : "N/A";
+        variances.push(`${sku?.code ?? "SKU"}: BOM expects ${expected.toFixed(3)}, actual ${actual.toFixed(3)} (${Number(variancePct) > 0 ? "+" : ""}${variancePct}%)`);
       }
     }
+    // Return null to NOT block — variance is informational only
     return null;
+  }, [selectedCloseLog, closeTotalQty, bomMap, rawConsumptions, rawSkuMap]);
+
+  // Separate variance display (informational, non-blocking)
+  const rawConsumptionVarianceInfo = useMemo(() => {
+    if (!selectedCloseLog || closeTotalQty <= 0) return null;
+    const bom = bomMap.get(selectedCloseLog.finishedSku.id);
+    if (!bom?.lines?.length) return null;
+
+    const expectedByRawSku = new Map<string, number>();
+    bom.lines.forEach((line) => {
+      expectedByRawSku.set(line.rawSkuId, (expectedByRawSku.get(line.rawSkuId) ?? 0) + closeTotalQty * line.quantity);
+    });
+
+    const actualByRawSku = new Map<string, number>();
+    rawConsumptions.forEach((row) => {
+      if (!row.rawSkuId) return;
+      const qty = Number(row.quantity || 0);
+      if (!Number.isFinite(qty)) return;
+      actualByRawSku.set(row.rawSkuId, (actualByRawSku.get(row.rawSkuId) ?? 0) + qty);
+    });
+
+    const variances: string[] = [];
+    const allSkuIds = new Set<string>([...expectedByRawSku.keys(), ...actualByRawSku.keys()]);
+    for (const rawSkuId of allSkuIds) {
+      const expected = expectedByRawSku.get(rawSkuId) ?? 0;
+      const actual = actualByRawSku.get(rawSkuId) ?? 0;
+      if (Math.abs(expected - actual) > 0.0001) {
+        const sku = rawSkuMap.get(rawSkuId);
+        const variancePct = expected > 0 ? (((actual - expected) / expected) * 100).toFixed(1) : "N/A";
+        const sign = Number(variancePct) > 0 ? "+" : "";
+        variances.push(`${sku?.code ?? "SKU"}: BOM ${expected.toFixed(1)} → Actual ${actual.toFixed(1)} (${sign}${variancePct}%)`);
+      }
+    }
+    return variances.length ? variances.join(" | ") : null;
   }, [selectedCloseLog, closeTotalQty, bomMap, rawConsumptions, rawSkuMap]);
 
   const laborCostPreview = useMemo(() => {
@@ -820,27 +863,21 @@ export default function ProductionPage() {
         push("error", "Raw consumption is required because a BOM is mapped for this finished SKU.");
         return;
       }
-      const expectedByRawSku = new Map<string, number>();
-      bom.lines.forEach((line) => {
-        expectedByRawSku.set(line.rawSkuId, (expectedByRawSku.get(line.rawSkuId) ?? 0) + totalOutput * line.quantity);
-      });
-      const actualByRawSku = new Map<string, number>();
-      consumptionPayload.forEach((row) => {
-        actualByRawSku.set(row.rawSkuId, (actualByRawSku.get(row.rawSkuId) ?? 0) + row.quantity);
-      });
-      const allRawSkuIds = new Set<string>([...expectedByRawSku.keys(), ...actualByRawSku.keys()]);
-      for (const rawSkuId of allRawSkuIds) {
-        const expectedQty = expectedByRawSku.get(rawSkuId) ?? 0;
-        const actualQty = actualByRawSku.get(rawSkuId) ?? 0;
-        if (Math.abs(expectedQty - actualQty) > 0.0001) {
-          const rawSku = rawSkuMap.get(rawSkuId);
-          push(
-            "error",
-            `Raw consumption mismatch for ${rawSku?.code ?? "raw SKU"}: expected ${expectedQty.toFixed(3)}, entered ${actualQty.toFixed(3)} (based on Good + Reject + Scrap = ${totalOutput}).`
-          );
-          return;
+      // Validate that actual qty does not exceed available batch stock
+      for (const row of consumptionPayload) {
+        if (row.batchId) {
+          const batch = rawBatchMap.get(row.batchId);
+          if (batch && row.quantity > batch.quantityRemaining) {
+            const rawSku = rawSkuMap.get(row.rawSkuId);
+            push(
+              "error",
+              `${rawSku?.code ?? "Raw SKU"}: actual qty (${row.quantity}) exceeds available batch stock (${batch.quantityRemaining}). Reduce to available stock.`
+            );
+            return;
+          }
         }
       }
+      // BOM mismatch is now allowed — variance is recorded for reference
     }
     try {
       await apiSend(`/api/production-logs/${closeLogId}/close`, "POST", {
@@ -1211,9 +1248,9 @@ export default function ProductionPage() {
                       </div>
                     );
                   })()}
-                  {rawConsumptionMismatchPreview ? (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                      {rawConsumptionMismatchPreview}
+                  {rawConsumptionVarianceInfo ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                      📊 Variance: {rawConsumptionVarianceInfo}
                     </div>
                   ) : null}
                   {rawConsumptions.length === 0 ? (
@@ -1303,25 +1340,31 @@ export default function ProductionPage() {
                                 label={`BOM Qty${raw ? ` (${raw.unit})` : ""}`}
                                 type="number"
                                 value={row.bomQty}
-                                onChange={(event) => {
-                                  const value = event.target.value;
-                                  setRawConsumptions((prev) =>
-                                    prev.map((item, idx) => (idx === index ? { ...item, bomQty: value } : item))
-                                  );
-                                  setRawRowsAuto(false);
-                                }}
+                                readOnly
+                                hint="Expected (reference)"
                               />
                               <Input
-                                label={`Quantity${raw ? ` (${raw.unit})` : ""}`}
+                                label={`Actual Qty${raw ? ` (${raw.unit})` : ""}`}
                                 type="number"
                                 value={row.quantity}
+                                max={batch ? batch.quantityRemaining : undefined}
+                                min={0}
                                 onChange={(event) => {
                                   const value = event.target.value;
-                                  setRawConsumptions((prev) =>
-                                    prev.map((item, idx) => (idx === index ? { ...item, quantity: value } : item))
-                                  );
+                                  const numVal = Number(value);
+                                  // Cap at available batch stock
+                                  if (batch && numVal > batch.quantityRemaining) {
+                                    setRawConsumptions((prev) =>
+                                      prev.map((item, idx) => (idx === index ? { ...item, quantity: String(batch.quantityRemaining) } : item))
+                                    );
+                                  } else {
+                                    setRawConsumptions((prev) =>
+                                      prev.map((item, idx) => (idx === index ? { ...item, quantity: value } : item))
+                                    );
+                                  }
                                   setRawRowsAuto(false);
                                 }}
+                                hint={batch ? `Available: ${batch.quantityRemaining}` : undefined}
                               />
                             </div>
                           </div>
