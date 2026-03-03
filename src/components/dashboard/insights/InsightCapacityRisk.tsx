@@ -2,145 +2,137 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/Badge";
-import { Activity, Calendar, User, Zap } from "lucide-react";
+import { Activity, Zap } from "lucide-react";
 
 type MachineRisk = {
-    id: string;
+    machineId: string;
+    code: string;
     name: string;
-    load: number;
-    requiredHrs: number;
-    risk: "High" | "Medium" | "Low";
-    status: "Critical" | "Warning" | "Stable";
-    shifts: { shift: string; load: number; operator: string }[];
-    maintenance: string;
+    requiredMinutes: number;
+    availableMinutes: number;
+    loadPct: number;
+    risk: string;
 };
 
-const machineData: MachineRisk[] = [
-    {
-        id: "M-02",
-        name: "Hydraulic Press",
-        load: 94.5,
-        requiredHrs: 47.4,
-        risk: "High",
-        status: "Critical",
-        shifts: [
-            { shift: "Shift A (Morning)", load: 98, operator: "Ravi K." },
-            { shift: "Shift B (Evening)", load: 91, operator: "Amit S." },
-        ],
-        maintenance: "Overdue (Last: 20 days ago)"
-    },
-    {
-        id: "M-01",
-        name: "CNC Lathe",
-        load: 82.1,
-        requiredHrs: 38.2,
-        risk: "Medium",
-        status: "Warning",
-        shifts: [
-            { shift: "Shift A (Morning)", load: 85, operator: "Vikram R." },
-            { shift: "Shift B (Evening)", load: 79, operator: "Suresh P." },
-        ],
-        maintenance: "Scheduled in 3 days"
-    },
-    {
-        id: "M-INJ",
-        name: "Injection Molder",
-        load: 45.0,
-        requiredHrs: 12.0,
-        risk: "Low",
-        status: "Stable",
-        shifts: [
-            { shift: "Shift A (Morning)", load: 45, operator: "Auto Mode" },
-        ],
-        maintenance: "Up to date"
-    }
-];
+function buildFromData(data: any): MachineRisk[] {
+    if (!data?.capacityRisk?.items?.length) return [];
+    return data.capacityRisk.items.map((row: any) => ({
+        machineId: row.machineId,
+        code: row.code,
+        name: row.name,
+        requiredMinutes: row.requiredMinutes,
+        availableMinutes: row.availableMinutes,
+        loadPct: row.loadPct,
+        risk: row.risk
+    }));
+}
 
-export function InsightCapacityRisk() {
-    const [selectedId, setSelectedId] = useState<string>(machineData[0].id);
-    const selectedMachine = machineData.find(m => m.id === selectedId) || machineData[0];
+function formatHrs(minutes: number) {
+    return `${(minutes / 60).toFixed(1)}h`;
+}
+
+export function InsightCapacityRisk({ data }: { data?: any }) {
+    const machineData = buildFromData(data);
+    const [selectedId, setSelectedId] = useState<string>(machineData[0]?.machineId ?? "");
+    const selectedMachine = machineData.find(m => m.machineId === selectedId) || machineData[0];
+
+    if (!machineData.length) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
+                <Activity className="w-12 h-12 mb-3 text-green-400" />
+                <p className="text-lg font-semibold text-gray-600">No capacity risk detected</p>
+                <p className="text-sm">All machines have sufficient capacity for the upcoming orders.</p>
+            </div>
+        );
+    }
+
+    const riskVariant = (risk: string) => risk === "CRITICAL" || risk === "HIGH" ? "danger" : risk === "WATCH" ? "warning" : "neutral";
+    const windowDays = data?.capacityRisk?.windowDays ?? 7;
 
     return (
         <div className="flex h-full gap-6">
             {/* Master List */}
             <div className="w-1/3 border-r border-gray-100 pr-6 overflow-y-auto">
-                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Machine Load (7d)</h3>
+                <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Machine Load ({windowDays}d Forecast)</h3>
                 <div className="space-y-3">
                     {machineData.map((item) => (
                         <button
-                            key={item.id}
-                            onClick={() => setSelectedId(item.id)}
-                            className={`w-full text-left p-4 rounded-xl border transition-all ${selectedId === item.id
-                                    ? "bg-blue-50 border-blue-200 shadow-sm"
-                                    : "bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50"
+                            key={item.machineId}
+                            onClick={() => setSelectedId(item.machineId)}
+                            className={`w-full text-left p-4 rounded-xl border transition-all ${selectedId === item.machineId
+                                ? "bg-blue-50 border-blue-200 shadow-sm"
+                                : "bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50"
                                 }`}
                         >
                             <div className="flex justify-between items-center mb-1">
-                                <span className={`font-bold text-sm ${selectedId === item.id ? "text-blue-700" : "text-gray-900"}`}>
-                                    {item.name}
+                                <span className={`font-bold text-sm ${selectedId === item.machineId ? "text-blue-700" : "text-gray-900"}`}>
+                                    {item.code} · {item.name}
                                 </span>
-                                <Badge variant={item.risk === "High" ? "danger" : item.risk === "Medium" ? "warning" : "neutral"} label={item.risk} className="text-[10px]" />
+                                <Badge variant={riskVariant(item.risk)} label={item.risk} className="text-[10px]" />
                             </div>
                             <div className="flex justify-between items-center text-xs text-gray-500 mt-2">
-                                <span>Load: <span className="font-mono font-bold text-gray-900">{item.load}%</span></span>
-                                <span>Req: {item.requiredHrs}h</span>
+                                <span>Load: <span className="font-mono font-bold text-gray-900">{item.loadPct.toFixed(1)}%</span></span>
+                                <span>Req: {formatHrs(item.requiredMinutes)}</span>
                             </div>
-                            {/* Mini Progress Bar */}
                             <div className="w-full h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
                                 <div
-                                    className={`h-full ${item.load > 90 ? "bg-red-500" : item.load > 80 ? "bg-orange-400" : "bg-green-500"}`}
-                                    style={{ width: `${item.load}%` }}
+                                    className={`h-full ${item.loadPct > 100 ? "bg-red-500" : item.loadPct > 80 ? "bg-orange-400" : "bg-green-500"}`}
+                                    style={{ width: `${Math.min(item.loadPct, 100)}%` }}
                                 />
                             </div>
                         </button>
                     ))}
                 </div>
+                {data?.capacityRisk?.missingRouting?.length > 0 && (
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+                        <span className="font-bold">Missing Routing:</span> {data.capacityRisk.missingRouting.length} SKU(s) need routing setup for capacity forecasting.
+                    </div>
+                )}
             </div>
 
             {/* Detail View */}
             <div className="flex-1 overflow-y-auto pl-2">
-                <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
-                    <div>
-                        <h2 className="text-2xl font-serif font-bold text-gray-900">{selectedMachine.name}</h2>
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                            <span className="flex items-center gap-1"><Zap className="w-4 h-4 text-amber-500" /> {selectedMachine.status} Load</span>
-                            <span className="flex items-center gap-1"><Calendar className="w-4 h-4 text-blue-500" /> {selectedMachine.maintenance}</span>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-sm text-gray-500">Capacity Utilization</div>
-                        <div className={`text-3xl font-bold ${selectedMachine.load > 90 ? "text-red-600" : "text-gray-900"}`}>{selectedMachine.load}%</div>
-                    </div>
-                </div>
-
-                {/* Shift Breakdown */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    {selectedMachine.shifts.map((shift, idx) => (
-                        <div key={idx} className="bg-gray-50 rounded-xl p-4 border border-gray-100">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="font-bold text-gray-900 text-sm">{shift.shift}</span>
-                                <Badge variant="neutral" label={shift.operator} />
+                {selectedMachine && (
+                    <>
+                        <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
+                            <div>
+                                <h2 className="text-2xl font-serif font-bold text-gray-900">{selectedMachine.code} · {selectedMachine.name}</h2>
+                                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                                    <span className="flex items-center gap-1"><Zap className="w-4 h-4 text-amber-500" /> {selectedMachine.risk} Risk</span>
+                                </div>
                             </div>
-                            <div className="flex items-end gap-2">
-                                <span className="text-2xl font-bold text-gray-800">{shift.load}%</span>
-                                <span className="text-xs text-gray-500 mb-1">load factor</span>
+                            <div className="text-right">
+                                <div className="text-sm text-gray-500">Capacity Utilization</div>
+                                <div className={`text-3xl font-bold ${selectedMachine.loadPct > 100 ? "text-red-600" : selectedMachine.loadPct > 80 ? "text-orange-600" : "text-gray-900"}`}>{selectedMachine.loadPct.toFixed(1)}%</div>
                             </div>
                         </div>
-                    ))}
-                </div>
 
-                {/* Recommendation */}
-                <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
-                    <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
-                        <Activity className="w-5 h-5" /> Capacity Optimization
-                    </h4>
-                    <p className="text-sm text-blue-800 leading-relaxed">
-                        {selectedMachine.load > 90
-                            ? `This machine is running near maximum capacity defined by the manufacturer. Consider offloading ${Math.round(selectedMachine.requiredHrs * 0.1)} hours to the backup unit or scheduling an overtime shift to prevent thermal throttling.`
-                            : "Machine is operating within safe parameters. No immediate action required."}
-                    </p>
-                </div>
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <div className="p-4 bg-blue-50 rounded-xl border border-blue-100">
+                                <div className="text-sm text-blue-600 font-medium mb-1">Required Time</div>
+                                <div className="text-2xl font-bold text-blue-900">{formatHrs(selectedMachine.requiredMinutes)}</div>
+                            </div>
+                            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <div className="text-sm text-gray-600 font-medium mb-1">Available ({windowDays}d)</div>
+                                <div className="text-2xl font-bold text-gray-900">{formatHrs(selectedMachine.availableMinutes)}</div>
+                            </div>
+                        </div>
 
+                        {/* Recommendation */}
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-6">
+                            <h4 className="font-bold text-blue-900 mb-2 flex items-center gap-2">
+                                <Activity className="w-5 h-5" /> Capacity Optimization
+                            </h4>
+                            <p className="text-sm text-blue-800 leading-relaxed">
+                                {selectedMachine.loadPct > 100
+                                    ? `This machine is OVERLOADED at ${selectedMachine.loadPct.toFixed(0)}%. It needs ${formatHrs(selectedMachine.requiredMinutes)} but only ${formatHrs(selectedMachine.availableMinutes)} is available. Consider offloading work to an alternative machine or scheduling overtime.`
+                                    : selectedMachine.loadPct > 80
+                                        ? `This machine is running at high capacity (${selectedMachine.loadPct.toFixed(0)}%). Monitor closely and consider preemptive maintenance to avoid bottlenecks.`
+                                        : "Machine is operating within safe parameters. No immediate action required."}
+                            </p>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

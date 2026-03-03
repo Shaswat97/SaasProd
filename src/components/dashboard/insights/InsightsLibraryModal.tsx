@@ -23,9 +23,10 @@ type InsightTopic = "loss" | "capacity" | "profitability" | "workforce" | "machi
 type InsightsLibraryModalProps = {
     isOpen: boolean;
     onClose: () => void;
+    data?: any;
 };
 
-export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalProps) {
+export function InsightsLibraryModal({ isOpen, onClose, data }: InsightsLibraryModalProps) {
     const [selectedTopic, setSelectedTopic] = useState<InsightTopic>(null);
 
     const topics = [
@@ -36,7 +37,7 @@ export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalPr
             icon: TrendingDown,
             color: "bg-red-100 text-red-600",
             tag: "#QualityControl",
-            content: <InsightLossAnalysis />
+            content: <InsightLossAnalysis data={data} />
         },
         {
             id: "capacity" as const,
@@ -45,7 +46,7 @@ export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalPr
             icon: Activity,
             color: "bg-blue-100 text-blue-600",
             tag: "#Machinery",
-            content: <InsightCapacityRisk />
+            content: <InsightCapacityRisk data={data} />
         },
         {
             id: "profitability" as const,
@@ -54,7 +55,7 @@ export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalPr
             icon: DollarSign,
             color: "bg-green-100 text-green-600",
             tag: "#Strategy",
-            content: <InsightProfitability />
+            content: <InsightProfitability data={data} />
         },
         {
             id: "workforce" as const,
@@ -63,7 +64,7 @@ export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalPr
             icon: Users,
             color: "bg-purple-100 text-purple-600",
             tag: "#Workforce",
-            content: <InsightEmployeePerformance />
+            content: <InsightEmployeePerformance data={data} />
         },
         {
             id: "machine_health" as const,
@@ -72,7 +73,7 @@ export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalPr
             icon: Activity,
             color: "bg-blue-100 text-blue-600",
             tag: "#Machinery",
-            content: <InsightMachineHealth />
+            content: <InsightMachineHealth data={data} />
         },
         {
             id: "inventory" as const,
@@ -81,7 +82,7 @@ export function InsightsLibraryModal({ isOpen, onClose }: InsightsLibraryModalPr
             icon: Package,
             color: "bg-orange-100 text-orange-600",
             tag: "#SupplyChain",
-            content: <InsightInventoryHealth />
+            content: <InsightInventoryHealth data={data} />
         }
     ];
 

@@ -2,86 +2,70 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/Badge";
-import { AlertTriangle, TrendingDown, Users, Clock, ArrowRight } from "lucide-react";
+import { AlertTriangle, TrendingDown, ArrowRight } from "lucide-react";
+
+const currency = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 
 type LossItem = {
     id: string;
-    sku: string;
+    code: string;
     name: string;
-    lossCost: string;
+    lossCost: number;
     lossQty: number;
-    primaryReason: string;
-    rootCauses: { reason: string; pct: number; color: string }[];
-    timeline: { time: string; event: string; type: "error" | "info" }[];
-    operator: string;
-    batchId: string;
+    rejectQty: number;
+    scrapQty: number;
+    logs: number;
 };
 
-const lossData: LossItem[] = [
-    {
-        id: "FG-01",
-        sku: "FG-01",
-        name: "Precision Housing",
-        lossCost: "₹4,200",
-        lossQty: 21,
-        primaryReason: "Dimensional Deviation",
-        rootCauses: [
-            { reason: "Dimensional Deviation", pct: 60, color: "bg-red-500" },
-            { reason: "Surface Scratch", pct: 30, color: "bg-orange-500" },
-            { reason: "Material Defect", pct: 10, color: "bg-gray-400" },
-        ],
-        timeline: [
-            { time: "10:15 AM", event: "Batch Start - Operator A", type: "info" },
-            { time: "11:30 AM", event: "Sensor Drift Detected", type: "error" },
-            { time: "11:45 AM", event: "5 Units Rejected (Out of Spec)", type: "error" },
-            { time: "12:00 PM", event: "Recalibration Performed", type: "info" },
-        ],
-        operator: "Rajesh Kumar (Shift A)",
-        batchId: "B-2026-X99"
-    },
-    {
-        id: "FG-02",
-        sku: "FG-02",
-        name: "Hydraulic Bracket",
-        lossCost: "₹3,800",
-        lossQty: 18,
-        primaryReason: "Casting Porosity",
-        rootCauses: [
-            { reason: "Casting Porosity", pct: 80, color: "bg-red-500" },
-            { reason: "Machining Error", pct: 20, color: "bg-blue-500" },
-        ],
-        timeline: [
-            { time: "09:00 AM", event: "Molding Process Start", type: "info" },
-            { time: "02:20 PM", event: "Quality Check Failed (Air pockets)", type: "error" },
-        ],
-        operator: "Sunil V. (Shift B)",
-        batchId: "B-2026-Y10"
-    },
-    {
-        id: "FG-104",
-        sku: "FG-104",
-        name: "Insulated Cable Roll",
-        lossCost: "₹1,200",
-        lossQty: 8,
-        primaryReason: "Insulation Damage",
-        rootCauses: [
-            { reason: "Insulation Tear", pct: 100, color: "bg-red-500" },
-        ],
-        timeline: [],
-        operator: "Autolines System",
-        batchId: "C-9901"
-    }
-];
+function buildFromData(data: any): LossItem[] {
+    if (!data?.lossLeakage?.topLossSkus?.length) return [];
+    return data.lossLeakage.topLossSkus.map((row: any) => ({
+        id: row.skuId,
+        code: row.code,
+        name: row.name,
+        lossCost: row.lossCost,
+        lossQty: row.lossQty,
+        rejectQty: row.rejectQty,
+        scrapQty: row.scrapQty,
+        logs: row.logs
+    }));
+}
 
-export function InsightLossAnalysis() {
-    const [selectedId, setSelectedId] = useState<string>(lossData[0].id);
+export function InsightLossAnalysis({ data }: { data?: any }) {
+    const lossData = buildFromData(data);
+    const [selectedId, setSelectedId] = useState<string>(lossData[0]?.id ?? "");
     const selectedItem = lossData.find(item => item.id === selectedId) || lossData[0];
+
+    const totalRejectCost = data?.lossLeakage?.rejectCost ?? 0;
+    const totalScrapCost = data?.lossLeakage?.scrapCost ?? 0;
+    const totalMaterialVariance = data?.lossLeakage?.materialVarianceCost ?? 0;
+    const totalLoss = totalRejectCost + totalScrapCost + totalMaterialVariance;
+
+    if (!lossData.length) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-12">
+                <TrendingDown className="w-12 h-12 mb-3 text-green-400" />
+                <p className="text-lg font-semibold text-gray-600">No loss data in this period</p>
+                <p className="text-sm">Great job — zero production waste detected!</p>
+            </div>
+        );
+    }
+
+    const rejectPct = selectedItem ? (selectedItem.lossQty > 0 ? (selectedItem.rejectQty / selectedItem.lossQty) * 100 : 0) : 0;
+    const scrapPct = selectedItem ? (selectedItem.lossQty > 0 ? (selectedItem.scrapQty / selectedItem.lossQty) * 100 : 0) : 0;
 
     return (
         <div className="flex h-full gap-6">
-            {/* Master List (Left Sidebar) */}
+            {/* Master List */}
             <div className="w-1/3 border-r border-gray-100 pr-6 overflow-y-auto">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Top Loss Drivers</h3>
+                {/* Summary */}
+                <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-xs space-y-1">
+                    <div className="flex justify-between"><span className="text-red-700">Reject Cost</span><span className="font-bold text-red-800">{currency.format(totalRejectCost)}</span></div>
+                    <div className="flex justify-between"><span className="text-red-700">Scrap Cost</span><span className="font-bold text-red-800">{currency.format(totalScrapCost)}</span></div>
+                    <div className="flex justify-between"><span className="text-red-700">Material Variance</span><span className="font-bold text-red-800">{currency.format(totalMaterialVariance)}</span></div>
+                    <div className="border-t border-red-200 pt-1 flex justify-between font-bold"><span className="text-red-900">Total Loss</span><span className="text-red-900">{currency.format(totalLoss)}</span></div>
+                </div>
                 <div className="space-y-3">
                     {lossData.map((item) => (
                         <button
@@ -94,96 +78,97 @@ export function InsightLossAnalysis() {
                         >
                             <div className="flex justify-between items-start mb-1">
                                 <span className={`font-bold text-sm ${selectedId === item.id ? "text-purple-700" : "text-gray-900"}`}>
-                                    {item.sku}
+                                    {item.code}
                                 </span>
-                                <span className="text-red-600 font-mono font-bold">{item.lossCost}</span>
+                                <span className="text-red-600 font-mono font-bold">{currency.format(item.lossCost)}</span>
                             </div>
                             <div className="text-xs text-gray-500 truncate mb-2">{item.name}</div>
-                            <Badge variant="danger" label={`${item.lossQty} units`} className="text-[10px] px-1.5 py-0.5" />
+                            <Badge variant="danger" label={`${item.lossQty} units lost`} className="text-[10px] px-1.5 py-0.5" />
                         </button>
                     ))}
                 </div>
             </div>
 
-            {/* Detail View (Right Content) */}
+            {/* Detail View */}
             <div className="flex-1 overflow-y-auto pl-2">
-                <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
-                    <div>
-                        <h2 className="text-2xl font-serif font-bold text-gray-900">{selectedItem.name} ({selectedItem.sku})</h2>
-                        <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                            <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-amber-500" /> {selectedItem.primaryReason}</span>
-                            <span className="flex items-center gap-1"><Users className="w-4 h-4 text-blue-500" /> {selectedItem.operator}</span>
-                            <span className="font-mono bg-gray-100 px-2 py-0.5 rounded text-gray-700">{selectedItem.batchId}</span>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <div className="text-sm text-gray-500">Total Loss Impact</div>
-                        <div className="text-3xl font-bold text-red-600">{selectedItem.lossCost}</div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Root Cause Analysis */}
-                    <div className="bg-gray-50 rounded-2xl p-6">
-                        <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <TrendingDown className="w-5 h-5 text-gray-700" /> Root Cause Breakdown
-                        </h4>
-                        <div className="space-y-4">
-                            {selectedItem.rootCauses.map((cause, idx) => (
-                                <div key={idx}>
-                                    <div className="flex justify-between text-sm mb-1">
-                                        <span className="font-medium text-gray-700">{cause.reason}</span>
-                                        <span className="font-bold text-gray-900">{cause.pct}%</span>
-                                    </div>
-                                    <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
-                                        <div className={`h-full ${cause.color}`} style={{ width: `${cause.pct}%` }} />
-                                    </div>
+                {selectedItem && (
+                    <>
+                        <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
+                            <div>
+                                <h2 className="text-2xl font-serif font-bold text-gray-900">{selectedItem.name} ({selectedItem.code})</h2>
+                                <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                                    <span className="flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-amber-500" /> {selectedItem.logs} production run{selectedItem.logs !== 1 ? "s" : ""}</span>
                                 </div>
-                            ))}
+                            </div>
+                            <div className="text-right">
+                                <div className="text-sm text-gray-500">Total Loss Impact</div>
+                                <div className="text-3xl font-bold text-red-600">{currency.format(selectedItem.lossCost)}</div>
+                            </div>
                         </div>
-                    </div>
 
-                    {/* Timeline */}
-                    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-                        <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <Clock className="w-5 h-5 text-gray-700" /> Incident Timeline
-                        </h4>
-                        <div className="space-y-6 relative pl-2">
-                            {/* Vertical Line */}
-                            <div className="absolute left-[15px] top-2 bottom-2 w-0.5 bg-gray-100" />
-
-                            {selectedItem.timeline.length > 0 ? selectedItem.timeline.map((event, idx) => (
-                                <div key={idx} className="relative flex gap-4 items-start">
-                                    <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 z-10 ${event.type === "error" ? "bg-red-500 ring-2 ring-red-100" : "bg-blue-500 ring-2 ring-blue-100"}`} />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Reject vs Scrap Breakdown */}
+                            <div className="bg-gray-50 rounded-2xl p-6">
+                                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                    <TrendingDown className="w-5 h-5 text-gray-700" /> Loss Breakdown
+                                </h4>
+                                <div className="space-y-4">
                                     <div>
-                                        <div className="text-xs font-mono text-gray-400 mb-0.5">{event.time}</div>
-                                        <div className={`text-sm font-medium ${event.type === "error" ? "text-red-700" : "text-gray-700"}`}>
-                                            {event.event}
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="font-medium text-gray-700">Reject</span>
+                                            <span className="font-bold text-gray-900">{selectedItem.rejectQty} units ({rejectPct.toFixed(0)}%)</span>
+                                        </div>
+                                        <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                                            <div className="h-full bg-red-500" style={{ width: `${rejectPct}%` }} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between text-sm mb-1">
+                                            <span className="font-medium text-gray-700">Scrap</span>
+                                            <span className="font-bold text-gray-900">{selectedItem.scrapQty} units ({scrapPct.toFixed(0)}%)</span>
+                                        </div>
+                                        <div className="h-2 w-full bg-gray-200 rounded-full overflow-hidden">
+                                            <div className="h-full bg-orange-500" style={{ width: `${scrapPct}%` }} />
                                         </div>
                                     </div>
                                 </div>
-                            )) : (
-                                <div className="text-sm text-gray-400 italic">No timeline events recorded.</div>
-                            )}
+                            </div>
+
+                            {/* Machine-level losses */}
+                            <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+                                <h4 className="font-bold text-gray-900 mb-4">Top Loss Machines</h4>
+                                <div className="space-y-3">
+                                    {(data?.lossLeakage?.topLossMachines ?? []).slice(0, 5).map((machine: any) => (
+                                        <div key={machine.machineId} className="flex justify-between items-center text-sm">
+                                            <span className="text-gray-700">{machine.code} · {machine.name}</span>
+                                            <span className="font-mono font-bold text-red-600">{currency.format(machine.lossCost)}</span>
+                                        </div>
+                                    ))}
+                                    {(!data?.lossLeakage?.topLossMachines?.length) && (
+                                        <div className="text-sm text-gray-400 italic">No machine-level data.</div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                {/* Action Items */}
-                <div className="mt-8 bg-purple-50 border border-purple-100 rounded-2xl p-6">
-                    <h4 className="font-bold text-purple-900 mb-2">Recommended Actions</h4>
-                    <ul className="text-sm text-purple-800 space-y-2">
-                        <li className="flex items-start gap-2">
-                            <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-purple-500" />
-                            Check calibration logs for CNC Lathe regarding &quot;{selectedItem.primaryReason}&quot;.
-                        </li>
-                        <li className="flex items-start gap-2">
-                            <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-purple-500" />
-                            Review operator training for {selectedItem.operator.split('(')[0]}.
-                        </li>
-                    </ul>
-                </div>
-
+                        {/* Recommendation */}
+                        <div className="mt-8 bg-purple-50 border border-purple-100 rounded-2xl p-6">
+                            <h4 className="font-bold text-purple-900 mb-2">Recommended Actions</h4>
+                            <ul className="text-sm text-purple-800 space-y-2">
+                                <li className="flex items-start gap-2">
+                                    <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-purple-500" />
+                                    Investigate reject root causes for {selectedItem.code} — {selectedItem.rejectQty} units rejected across {selectedItem.logs} production runs.
+                                </li>
+                                {totalMaterialVariance > 0 && (
+                                    <li className="flex items-start gap-2">
+                                        <ArrowRight className="w-4 h-4 mt-0.5 shrink-0 text-purple-500" />
+                                        Material variance loss of {currency.format(totalMaterialVariance)} detected. Review BOM accuracy and raw material quality.
+                                    </li>
+                                )}
+                            </ul>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

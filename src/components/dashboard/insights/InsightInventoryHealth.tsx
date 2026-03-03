@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Badge } from "@/components/Badge";
-import { Package, AlertTriangle, Clock, TrendingDown, AlertCircle } from "lucide-react";
+import { Package, AlertTriangle, Clock, AlertCircle } from "lucide-react";
 import { DataTable } from "@/components/DataTable";
+
+const number = new Intl.NumberFormat("en-IN");
 
 type InventoryCategory = {
     id: string;
@@ -14,63 +16,93 @@ type InventoryCategory = {
     icon: any;
 };
 
-const categories: InventoryCategory[] = [
-    {
-        id: "stockout_risk",
-        title: "Stockout Risk",
-        description: "Raw materials with less than 14 days of cover.",
-        severity: "critical",
-        count: 1,
-        icon: AlertTriangle
-    },
-    {
-        id: "dead_stock",
-        title: "Dead Stock",
-        description: "No movement for 90+ days.",
-        severity: "neutral",
-        count: 0,
-        icon: Package
-    },
-    {
-        id: "slow_moving",
-        title: "Slow Moving",
-        description: "Movement older than 30 days.",
-        severity: "warning",
-        count: 1,
-        icon: Clock
-    },
-    {
-        id: "batch_aging",
-        title: "Raw Batch Aging",
-        description: "Open raw batches older than 30 days.",
-        severity: "neutral",
-        count: 0,
-        icon: Clock
-    }
-];
+function buildCategories(data: any): InventoryCategory[] {
+    const inv = data?.inventoryHealth;
+    const stockoutCount = inv?.stockoutRisk?.length ?? 0;
+    const deadCount = inv?.deadStock?.length ?? 0;
+    const slowCount = inv?.slowMoving?.length ?? 0;
+    const batchCount = inv?.rawBatchAging?.length ?? 0;
 
-// Mock Data for Details
-const stockoutData = [
-    { sku: "RM-01 - Steel Rod 12mm", onHand: "0 KG", dailyUse: "400 KG", cover: "0 Days" }
-];
+    return [
+        {
+            id: "stockout_risk",
+            title: "Stockout Risk",
+            description: "Raw materials with less than 14 days of cover.",
+            severity: stockoutCount > 0 ? "critical" : "neutral",
+            count: stockoutCount,
+            icon: AlertTriangle
+        },
+        {
+            id: "dead_stock",
+            title: "Dead Stock",
+            description: "No movement for 90+ days.",
+            severity: deadCount > 0 ? "warning" : "neutral",
+            count: deadCount,
+            icon: Package
+        },
+        {
+            id: "slow_moving",
+            title: "Slow Moving",
+            description: "Movement older than 30 days (but under 90).",
+            severity: slowCount > 0 ? "warning" : "neutral",
+            count: slowCount,
+            icon: Clock
+        },
+        {
+            id: "batch_aging",
+            title: "Raw Batch Aging",
+            description: "Open raw batches older than 30 days.",
+            severity: batchCount > 0 ? "warning" : "neutral",
+            count: batchCount,
+            icon: Clock
+        }
+    ];
+}
 
-const slowMovingData = [
-    { sku: "RM-001 - Steel Sheet 2mm", qty: "5,197 kg", age: "45 Days" }
-];
-
-export function InsightInventoryHealth() {
+export function InsightInventoryHealth({ data }: { data?: any }) {
+    const categories = buildCategories(data);
     const [selectedId, setSelectedId] = useState<string>("stockout_risk");
     const selectedCategory = categories.find(c => c.id === selectedId) || categories[0];
+
+    const inv = data?.inventoryHealth;
+
+    const stockoutRows = (inv?.stockoutRisk ?? []).map((row: any) => ({
+        sku: `${row.code} · ${row.name}`,
+        onHand: `${number.format(row.onHand)} ${row.unit}`,
+        dailyUse: `${number.format(Math.round(row.avgDailyUsage))} ${row.unit}`,
+        cover: row.daysCover != null ? `${Math.round(row.daysCover)} Days` : "—"
+    }));
+
+    const deadStockRows = (inv?.deadStock ?? []).map((row: any) => ({
+        sku: `${row.code} · ${row.name}`,
+        qty: `${number.format(row.qty)} ${row.unit}`,
+        age: `${row.ageDays} Days`
+    }));
+
+    const slowMovingRows = (inv?.slowMoving ?? []).map((row: any) => ({
+        sku: `${row.code} · ${row.name}`,
+        qty: `${number.format(row.qty)} ${row.unit}`,
+        age: `${row.ageDays} Days`
+    }));
+
+    const batchAgingRows = (inv?.rawBatchAging ?? []).map((row: any) => ({
+        batch: row.batchNumber,
+        sku: `${row.skuCode} · ${row.skuName}`,
+        remaining: `${number.format(row.quantityRemaining)} ${row.unit}`,
+        age: `${row.ageDays} Days`
+    }));
 
     const renderDetailContent = () => {
         switch (selectedId) {
             case "stockout_risk":
                 return (
                     <div className="space-y-4">
-                        <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 mb-6">
-                            <AlertCircle className="w-5 h-5 shrink-0" />
-                            <span className="text-sm font-medium">Immediate Action Required: Production layout at risk for 1 item.</span>
-                        </div>
+                        {stockoutRows.length > 0 && (
+                            <div className="flex items-center gap-2 p-4 bg-red-50 text-red-700 rounded-lg border border-red-100 mb-6">
+                                <AlertCircle className="w-5 h-5 shrink-0" />
+                                <span className="text-sm font-medium">Immediate Action Required: Production may be at risk for {stockoutRows.length} item{stockoutRows.length !== 1 ? "s" : ""}.</span>
+                            </div>
+                        )}
                         <DataTable
                             columns={[
                                 { key: "sku", label: "RAW SKU" },
@@ -78,13 +110,10 @@ export function InsightInventoryHealth() {
                                 { key: "dailyUse", label: "AVG DAILY USE", align: "right" },
                                 { key: "cover", label: "DAYS COVER", align: "right" },
                             ]}
-                            rows={stockoutData}
+                            rows={stockoutRows}
                             className="bg-white"
-                            emptyLabel="No stockout risks detected."
+                            emptyLabel="No stockout risks detected. Great inventory management!"
                         />
-                        <div className="flex justify-end mt-4">
-                            <button className="text-sm text-red-600 font-bold hover:underline">Generate Reorder Request →</button>
-                        </div>
                     </div>
                 );
             case "dead_stock":
@@ -93,10 +122,10 @@ export function InsightInventoryHealth() {
                         <DataTable
                             columns={[
                                 { key: "sku", label: "SKU" },
-                                { key: "qty", label: "QTY", align: "right" },
-                                { key: "age", label: "AGE (DAYS)", align: "right" },
+                                { key: "qty", label: "QTY ON HAND", align: "right" },
+                                { key: "age", label: "DAYS SINCE LAST MOVE", align: "right" },
                             ]}
-                            rows={[]} // Empty for demo as per screenshot
+                            rows={deadStockRows}
                             className="bg-white"
                             emptyLabel="No dead stock detected. Great job!"
                         />
@@ -105,14 +134,14 @@ export function InsightInventoryHealth() {
             case "slow_moving":
                 return (
                     <div className="space-y-4">
-                        <p className="text-sm text-gray-500 mb-4">Items with low turnover rate over the last 30 days.</p>
+                        <p className="text-sm text-gray-500 mb-4">Items with low turnover rate over the last 30–90 days.</p>
                         <DataTable
                             columns={[
                                 { key: "sku", label: "SKU" },
-                                { key: "qty", label: "QTY", align: "right" },
-                                { key: "age", label: "AGE (DAYS)", align: "right" },
+                                { key: "qty", label: "QTY ON HAND", align: "right" },
+                                { key: "age", label: "DAYS SINCE LAST MOVE", align: "right" },
                             ]}
-                            rows={slowMovingData}
+                            rows={slowMovingRows}
                             className="bg-white"
                             emptyLabel="No slow moving items."
                         />
@@ -128,7 +157,7 @@ export function InsightInventoryHealth() {
                                 { key: "remaining", label: "REMAINING", align: "right" },
                                 { key: "age", label: "AGE (DAYS)", align: "right" },
                             ]}
-                            rows={[]} // Empty per screenshot
+                            rows={batchAgingRows}
                             className="bg-white"
                             emptyLabel="No aged raw batches."
                         />
@@ -141,7 +170,6 @@ export function InsightInventoryHealth() {
 
     return (
         <div className="flex h-full gap-6">
-            {/* Master List */}
             <div className="w-1/3 border-r border-gray-100 pr-6 overflow-y-auto">
                 <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Health Categories</h3>
                 <div className="space-y-3">
@@ -150,8 +178,8 @@ export function InsightInventoryHealth() {
                             key={item.id}
                             onClick={() => setSelectedId(item.id)}
                             className={`w-full text-left p-4 rounded-xl border transition-all ${selectedId === item.id
-                                    ? "bg-gray-50 border-gray-300 shadow-sm"
-                                    : "bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50"
+                                ? "bg-gray-50 border-gray-300 shadow-sm"
+                                : "bg-white border-gray-100 hover:border-gray-300 hover:bg-gray-50"
                                 }`}
                         >
                             <div className="flex justify-between items-start mb-1">
@@ -160,7 +188,7 @@ export function InsightInventoryHealth() {
                                 </span>
                                 <Badge
                                     variant={item.severity === "critical" ? "danger" : item.severity === "warning" ? "warning" : "neutral"}
-                                    label={item.count > 0 ? `${item.count} Items` : "Clean"}
+                                    label={item.count > 0 ? `${item.count} Item${item.count !== 1 ? "s" : ""}` : "Clean"}
                                     className="text-[10px]"
                                 />
                             </div>
@@ -170,7 +198,6 @@ export function InsightInventoryHealth() {
                 </div>
             </div>
 
-            {/* Detail View */}
             <div className="flex-1 overflow-y-auto pl-2">
                 <div className="flex justify-between items-start mb-6 border-b border-gray-100 pb-4">
                     <div>

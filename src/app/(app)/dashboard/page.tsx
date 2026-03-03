@@ -1257,7 +1257,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Business Insights Modal */}
-      <InsightsLibraryModal isOpen={showInsights} onClose={() => setShowInsights(false)} />
+      <InsightsLibraryModal isOpen={showInsights} onClose={() => setShowInsights(false)} data={data} />
 
       <Modal
         open={showRevenueDrilldown}
