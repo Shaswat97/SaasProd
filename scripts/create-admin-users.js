@@ -3,7 +3,9 @@ const crypto = require("crypto");
 const prisma = new PrismaClient();
 
 function hashPin(pin) {
-    return crypto.createHash("sha256").update(pin).digest("hex");
+    const salt = crypto.randomBytes(16).toString("hex");
+    const digest = crypto.scryptSync(pin, salt, 64).toString("hex");
+    return `scrypt$${salt}$${digest}`;
 }
 
 async function main() {
