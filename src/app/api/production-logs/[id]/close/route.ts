@@ -252,8 +252,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
         );
         const batchRows = batchIds.length
           ? await tx.rawMaterialBatch.findMany({
-              where: { id: { in: batchIds }, companyId }
-            })
+            where: { id: { in: batchIds }, companyId }
+          })
           : [];
         const batchMap = new Map(batchRows.map((row) => [row.id, row]));
         if (batchRows.length !== batchIds.length) {
@@ -282,12 +282,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
           for (const rawSkuId of allRawSkuIds) {
             const expectedQty = expectedByRawSku.get(rawSkuId) ?? 0;
             const actualQty = actualByRawSku.get(rawSkuId) ?? 0;
-            if (Math.abs(expectedQty - actualQty) > 0.0001) {
-              const rawSku = rawSkus.find((sku) => sku.id === rawSkuId);
-              throw new Error(
-                `Raw consumption mismatch for ${rawSku?.code ?? "raw SKU"}: expected ${expectedQty}, entered ${actualQty} (based on Good + Reject + Scrap = ${totalQty}).`
-              );
-            }
+            // Removed strict validation so actual can be more or less than expected.
+            // Variance is tracked and calculated below.
           }
         }
 
@@ -499,13 +495,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
           closeNotes: data.closeNotes ?? log.closeNotes,
           ...(remainingAfter === 0
             ? {
-                expectedRawQty,
-                actualRawQty,
-                expectedRawCost,
-                actualRawCost,
-                materialVariancePct,
-                materialVarianceCost
-              }
+              expectedRawQty,
+              actualRawQty,
+              expectedRawCost,
+              actualRawCost,
+              materialVariancePct,
+              materialVarianceCost
+            }
             : {})
         },
         include: {
