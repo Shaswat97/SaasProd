@@ -878,8 +878,12 @@ export default function SalesOrdersPage() {
   async function createDraftPo() {
     if (!detail) return;
     try {
-      await apiSend(`/api/sales-orders/${detail.id}/procure`, "POST");
-      push("success", "Draft purchase order created");
+      const result = await apiSend<any>(`/api/sales-orders/${detail.id}/procure`, "POST");
+      if (result && result.createdPoIds && result.createdPoIds.length === 0) {
+        push("error", "Cannot create PO: Please map preferred vendors for the missing raw materials in Master Data first.");
+      } else {
+        push("success", "Draft purchase order created");
+      }
       openDetail(detail.id);
       loadData();
     } catch (error: any) {
@@ -889,8 +893,12 @@ export default function SalesOrdersPage() {
 
   async function createDraftPoForOrder(orderId: string) {
     try {
-      await apiSend(`/api/sales-orders/${orderId}/procure`, "POST");
-      push("success", "Draft purchase order created");
+      const result = await apiSend<any>(`/api/sales-orders/${orderId}/procure`, "POST");
+      if (result && result.createdPoIds && result.createdPoIds.length === 0) {
+        push("error", "Cannot create PO: Please map preferred vendors for the missing raw materials in Master Data first.");
+      } else {
+        push("success", "Draft purchase order created");
+      }
       openDetail(orderId);
       loadData();
     } catch (error: any) {
@@ -2194,7 +2202,7 @@ export default function SalesOrdersPage() {
                 <CardHeader>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <CardTitle>Procurement Plan</CardTitle>
-                    {detail.procurementPlan.vendorPlans.length ? (
+                    {detail.availability.raw.some(r => r.shortageQty > 0) ? (
                       <Button variant="secondary" onClick={createDraftPo}>
                         Create Draft PO
                       </Button>
