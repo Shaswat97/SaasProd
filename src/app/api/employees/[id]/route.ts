@@ -14,12 +14,18 @@ export async function GET(request: Request, { params }: { params: { id: string }
   const prisma = guard.prisma;
   if (!prisma) return jsonError("Tenant not found", 404);
   const companyId = guard.context?.companyId ?? (await getDefaultCompanyId(prisma));
+  const isTechno = guard.context?.actorEmployeeCode === "Techno";
   const employee = await prisma.employee.findFirst({
     where: { id: params.id, companyId, deletedAt: null },
     include: { roles: { include: { role: true } } }
   });
 
   if (!employee) return jsonError("Employee not found", 404);
+
+  // God Mode: hide Techno from non-Techno users
+  if (employee.code === "Techno" && !isTechno) {
+    return jsonError("Employee not found", 404);
+  }
 
   return jsonOk(employee);
 }
@@ -54,6 +60,20 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   });
 
   if (!existing) return jsonError("Employee not found", 404);
+
+  // God Mode: only Techno can edit the Techno profile
+  const isTechno = guard.context?.actorEmployeeCode === "Techno";
+  if (existing.code === "Techno" && !isTechno) {
+    return jsonError("Cannot modify this employee", 403);
+  }
+  // Prevent renaming away from reserved code
+  if (existing.code === "Techno" && parsed.data.code && parsed.data.code.trim().toLowerCase() !== "techno") {
+    return jsonError('Cannot change the reserved "Techno" employee code', 400);
+  }
+  // Prevent stealing the Techno code
+  if (existing.code !== "Techno" && parsed.data.code?.trim().toLowerCase() === "techno") {
+    return jsonError('Employee code "Techno" is reserved', 400);
+  }
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -138,6 +158,12 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
   });
 
   if (!employee) return jsonError("Employee not found", 404);
+
+  // God Mode: only Techno can delete the Techno profile
+  const isTechno = guard.context?.actorEmployeeCode === "Techno";
+  if (employee.code === "Techno" && !isTechno) {
+    return jsonError("Cannot delete this employee", 403);
+  }
 
   const updated = await prisma.employee.update({
     where: { id: params.id },
