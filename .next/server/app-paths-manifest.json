@@ -1,6 +1,10 @@
 {
-  "/page": "app/page.js",
+  "/login/page": "app/login/page.js",
   "/api/active-user/route": "app/api/active-user/route.js",
+  "/api/vendors/route": "app/api/vendors/route.js",
+  "/api/auth/login/route": "app/api/auth/login/route.js",
   "/api/dashboard/route": "app/api/dashboard/route.js",
+  "/(app)/settings/page": "app/(app)/settings/page.js",
+  "/(app)/settings/master-data/vendors/page": "app/(app)/settings/master-data/vendors/page.js",
   "/(app)/dashboard/page": "app/(app)/dashboard/page.js"
 }

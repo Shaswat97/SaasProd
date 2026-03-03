@@ -618,9 +618,20 @@ export default function VendorsPage() {
                   skus: vendor._count?.vendorSkus ?? 0,
                   status: vendor.active ? "Active" : "Inactive",
                   actions: isTechno ? (
-                    <Button variant="ghost" onClick={() => handleEdit(vendor)}>
-                      Edit
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="ghost" onClick={() => handleEdit(vendor)}>
+                        Edit
+                      </Button>
+                      {vendor.vendorType !== "SCRAP" && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => handleEdit(vendor)}
+                          className="text-xs"
+                        >
+                          Link SKUs ({vendor._count?.vendorSkus ?? 0})
+                        </Button>
+                      )}
+                    </div>
                   ) : null
                 }))}
                 emptyLabel={loading ? "Loading vendors..." : "No vendors found."}
