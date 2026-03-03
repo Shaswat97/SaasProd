@@ -98,6 +98,8 @@ type BacklogLine = {
   lineProducedQty?: number;
   loggedGoodQty?: number;
   openQty: number;
+  inventoryStatus?: "SUFFICIENT" | "INSUFFICIENT" | "NO_BOM";
+  missingMaterials?: string[];
 };
 
 type ProductionLog = {
@@ -1492,6 +1494,7 @@ export default function ProductionPage() {
                     { key: "customer", label: "Customer" },
                     { key: "sku", label: "SKU" },
                     { key: "open", label: "Open Qty", align: "right" as const },
+                    { key: "inventory", label: "Inventory" },
                     { key: "status", label: "Status" }
                   ]}
                   rows={backlog
@@ -1512,6 +1515,19 @@ export default function ProductionPage() {
                         <span className={`font-medium ${line.openQty > 500 ? "text-red-600" : line.openQty > 100 ? "text-orange-600" : "text-green-600"}`}>
                           {line.openQty.toLocaleString()} {line.unit}
                         </span>
+                      ),
+                      inventory: (
+                        <div title={line.missingMaterials?.join("\n")}>
+                          {line.inventoryStatus === "SUFFICIENT" ? (
+                            <Badge variant="success" label="Available" />
+                          ) : line.inventoryStatus === "INSUFFICIENT" ? (
+                            <Badge variant="danger" className="cursor-help" label="Missing Raw" />
+                          ) : (
+                            <div title="No BOM or Raw items defined">
+                              <Badge variant="neutral" className="cursor-help" label="No BOM" />
+                            </div>
+                          )}
+                        </div>
                       ),
                       status: (
                         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${line.status === "PRODUCTION" ? "bg-blue-50 text-blue-700 border border-blue-200" :

@@ -95,6 +95,73 @@ export async function POST(request: Request) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      const bom = await tx.bom.findFirst({
+        where: { companyId, finishedSkuId, deletedAt: null },
+        include: { lines: { include: { rawSku: true } } },
+        orderBy: { version: "desc" }
+      });
+
+      const zones = await tx.zone.findMany({
+        where: { companyId, deletedAt: null, type: { in: ["RAW_MATERIAL", "PROCESSING_WIP", "PRODUCTION", "WIP"] } }
+      });
+      const rawZone = zones.find((zone) => zone.type === "RAW_MATERIAL");
+      const wipZone = zones.find((zone) => ["PROCESSING_WIP", "PRODUCTION", "WIP"].includes(zone.type));
+      if (!rawZone || !wipZone) {
+        throw new Error("Raw and WIP zones must exist before starting production");
+      }
+
+      // --- Pre-validation pass: Check for sufficient raw material stock ---
+      if (bom?.lines?.length) {
+        const requiredBySku = new Map<string, { code: string; name: string; required: number; have: number }>();
+
+        for (const line of bom.lines) {
+          if (line.rawSku.type !== "RAW") {
+            throw new Error(`BOM line ${line.rawSku.code} is not a RAW SKU`);
+          }
+          const quantity = data.plannedQty * line.quantity;
+          if (quantity <= 0) continue;
+
+          requiredBySku.set(line.rawSkuId, {
+            code: line.rawSku.code,
+            name: line.rawSku.name,
+            required: (requiredBySku.get(line.rawSkuId)?.required ?? 0) + quantity,
+            have: 0
+          });
+        }
+
+        if (requiredBySku.size > 0) {
+          const rawSkuIds = Array.from(requiredBySku.keys());
+
+          const rawBatches = await tx.rawMaterialBatch.findMany({
+            where: {
+              companyId,
+              zoneId: rawZone.id,
+              skuId: { in: rawSkuIds },
+              quantityRemaining: { gt: 0 }
+            }
+          });
+
+          for (const batch of rawBatches) {
+            const req = requiredBySku.get(batch.skuId);
+            if (req) {
+              req.have += batch.quantityRemaining;
+            }
+          }
+
+          const missing: string[] = [];
+          requiredBySku.forEach((req) => {
+            if (req.have < req.required) {
+              missing.push(`${req.code} (Need ${req.required.toFixed(2)}, Have ${req.have.toFixed(2)})`);
+            }
+          });
+
+          if (missing.length > 0) {
+            throw new Error(`Insufficient raw material for production:\n${missing.join("\n")}`);
+          }
+        }
+      }
+      // --- End Pre-validation pass ---
+
       const startAt = data.startAt ? new Date(data.startAt) : new Date();
       const operatorId = data.operatorId ?? data.crew?.find((entry) => entry.role === "OPERATOR")?.employeeId;
       const supervisorId = data.supervisorId ?? data.crew?.find((entry) => entry.role === "SUPERVISOR")?.employeeId;
@@ -126,21 +193,6 @@ export async function POST(request: Request) {
           }))
         });
       }
-
-      const zones = await tx.zone.findMany({
-        where: { companyId, deletedAt: null, type: { in: ["RAW_MATERIAL", "PROCESSING_WIP", "PRODUCTION", "WIP"] } }
-      });
-      const rawZone = zones.find((zone) => zone.type === "RAW_MATERIAL");
-      const wipZone = zones.find((zone) => ["PROCESSING_WIP", "PRODUCTION", "WIP"].includes(zone.type));
-      if (!rawZone || !wipZone) {
-        throw new Error("Raw and WIP zones must exist before starting production");
-      }
-
-      const bom = await tx.bom.findFirst({
-        where: { companyId, finishedSkuId, deletedAt: null },
-        include: { lines: { include: { rawSku: true } } },
-        orderBy: { version: "desc" }
-      });
 
       let totalRawCost = 0;
       if (bom?.lines?.length) {

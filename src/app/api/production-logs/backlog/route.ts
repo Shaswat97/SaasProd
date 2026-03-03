@@ -79,5 +79,55 @@ export async function GET(request: Request) {
     })
     .filter((line) => line.openQty > 0);
 
-  return jsonOk(backlog);
+  const rawZoneRows = await prisma.zone.findMany({
+    where: { companyId, deletedAt: null, type: "RAW_MATERIAL" },
+    select: { id: true }
+  });
+  const rawZoneIds = rawZoneRows.map((z) => z.id);
+
+  const rawBatches = await prisma.rawMaterialBatch.findMany({
+    where: { companyId, zoneId: { in: rawZoneIds }, quantityRemaining: { gt: 0 } },
+    select: { skuId: true, quantityRemaining: true }
+  });
+  const rawStockBySku = new Map<string, number>();
+  for (const batch of rawBatches) {
+    rawStockBySku.set(batch.skuId, (rawStockBySku.get(batch.skuId) ?? 0) + batch.quantityRemaining);
+  }
+
+  const finishedSkuIds = Array.from(new Set(backlog.map((line) => line.skuId)));
+  const boms = await prisma.bom.findMany({
+    where: { companyId, finishedSkuId: { in: finishedSkuIds }, deletedAt: null },
+    include: { lines: { include: { rawSku: true } } },
+    orderBy: { version: "desc" }
+  });
+
+  const bomByFinishedSku = new Map<string, typeof boms[0]>();
+  for (const bom of boms) {
+    if (!bomByFinishedSku.has(bom.finishedSkuId)) {
+      bomByFinishedSku.set(bom.finishedSkuId, bom);
+    }
+  }
+
+  const enrichedBacklog = backlog.map((line) => {
+    const bom = bomByFinishedSku.get(line.skuId);
+    if (!bom || !bom.lines.length) {
+      return { ...line, inventoryStatus: "NO_BOM", missingMaterials: [] };
+    }
+
+    const missing: string[] = [];
+    for (const bomLine of bom.lines) {
+      const neededQty = line.openQty * bomLine.quantity;
+      if (neededQty <= 0) continue;
+
+      const availableQty = rawStockBySku.get(bomLine.rawSkuId) ?? 0;
+      if (availableQty < neededQty) {
+        missing.push(`${bomLine.rawSku.code} (Need ${neededQty.toFixed(2)}, Have ${availableQty.toFixed(2)})`);
+      }
+    }
+
+    const status = missing.length > 0 ? "INSUFFICIENT" : "SUFFICIENT";
+    return { ...line, inventoryStatus: status, missingMaterials: missing };
+  });
+
+  return jsonOk(enrichedBacklog);
 }
