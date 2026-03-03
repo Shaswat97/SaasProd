@@ -2,30 +2,31 @@
 set -e
 
 ###############################################################################
-#  SaasProd Multi-Tenant Deployment Script for Hostinger VPS
-#  ---------------------------------------------------------
-#  This script sets up MULTIPLE isolated tenants on a single VPS.
-#  Each tenant gets: its own folder, database, PM2 process, and Nginx config.
+#  SaasProd Multi-Environment Deployment Script for Hostinger VPS
+#  ──────────────────────────────────────────────────────────────
+#  Sets up 3 internal environments (main, staging, prod) with separate
+#  databases, Git branches, PM2 processes, and Nginx configs.
 #
 #  Usage:  curl -sL https://raw.githubusercontent.com/Shaswat97/SaasProd/main/scripts/deploy_hostinger.sh | bash
 #
-#  IMPORTANT: Run this on a FRESH VPS only. It will overwrite existing configs.
+#  IMPORTANT: Run on a FRESH VPS only.
 ###############################################################################
 
 REPO="https://github.com/Shaswat97/SaasProd.git"
 DB_USER="saas_user"
 DB_PASS="saas_password"
 
-# ── Define tenants ──────────────────────────────────────────────────────────
-# Format: NAME:PORT:DB_NAME:DOMAIN
-TENANTS=(
-  "client1:3000:client1_db:staging.technosynergians.com"
-  "client2:3001:client2_db:test.technosynergians.com"
+# ── Internal environments ───────────────────────────────────────────────────
+# Format: NAME:PORT:DB_NAME:DOMAIN:BRANCH
+ENVS=(
+  "main:3000:main_db:main.technosynergians.com:main"
+  "staging:3001:staging_db:staging.technosynergians.com:staging"
+  "prod:3002:prod_db:prod.technosynergians.com:prod"
 )
 
 echo "============================================="
-echo "  SaasProd Multi-Tenant Deployment"
-echo "  Tenants: ${#TENANTS[@]}"
+echo "  SaasProd Multi-Environment Deployment"
+echo "  Environments: ${#ENVS[@]}"
 echo "============================================="
 
 # ── Step 1: Install system dependencies ─────────────────────────────────────
@@ -53,75 +54,82 @@ echo ">>> Step 2: Setting up PostgreSQL..."
 systemctl start postgresql
 systemctl enable postgresql > /dev/null 2>&1
 
-# Create shared DB user
 sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1 || \
   sudo -u postgres psql -c "CREATE USER ${DB_USER} WITH PASSWORD '${DB_PASS}';"
 
-# Create databases for each tenant
-for TENANT in "${TENANTS[@]}"; do
-  IFS=':' read -r NAME PORT DB_NAME DOMAIN <<< "$TENANT"
+for ENV in "${ENVS[@]}"; do
+  IFS=':' read -r NAME PORT DB_NAME DOMAIN BRANCH <<< "$ENV"
   sudo -u postgres psql -tc "SELECT 1 FROM pg_catalog.pg_database WHERE datname='${DB_NAME}'" | grep -q 1 || \
     sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER};"
   echo "    ✓ Database: ${DB_NAME}"
 done
 
-# ── Step 3: Stop existing services ─────────────────────────────────────────
+# ── Step 3: Clean up ───────────────────────────────────────────────────────
 echo ""
-echo ">>> Step 3: Cleaning up existing services..."
+echo ">>> Step 3: Cleaning up..."
 systemctl disable --now apache2 2>/dev/null || true
-for TENANT in "${TENANTS[@]}"; do
-  IFS=':' read -r NAME PORT DB_NAME DOMAIN <<< "$TENANT"
+for ENV in "${ENVS[@]}"; do
+  IFS=':' read -r NAME PORT DB_NAME DOMAIN BRANCH <<< "$ENV"
   pm2 delete "$NAME" 2>/dev/null || true
 done
 
-# ── Step 4: Deploy each tenant ──────────────────────────────────────────────
+# ── Step 4: Create Git branches if needed ───────────────────────────────────
 echo ""
-echo ">>> Step 4: Deploying tenants..."
+echo ">>> Step 4: Ensuring Git branches exist..."
+TEMP_CLONE=$(mktemp -d)
+git clone --bare "${REPO}" "${TEMP_CLONE}" > /dev/null 2>&1
+cd "${TEMP_CLONE}"
 
-for TENANT in "${TENANTS[@]}"; do
-  IFS=':' read -r NAME PORT DB_NAME DOMAIN <<< "$TENANT"
+for BRANCH_NAME in staging prod; do
+  if ! git show-ref --verify --quiet "refs/heads/${BRANCH_NAME}" 2>/dev/null; then
+    git branch "${BRANCH_NAME}" main
+    git push origin "${BRANCH_NAME}" > /dev/null 2>&1
+    echo "    ✓ Created branch: ${BRANCH_NAME}"
+  else
+    echo "    ✓ Branch exists: ${BRANCH_NAME}"
+  fi
+done
+cd /
+rm -rf "${TEMP_CLONE}"
+
+# ── Step 5: Deploy each environment ─────────────────────────────────────────
+echo ""
+echo ">>> Step 5: Deploying environments..."
+
+for ENV in "${ENVS[@]}"; do
+  IFS=':' read -r NAME PORT DB_NAME DOMAIN BRANCH <<< "$ENV"
   APP_DIR="/var/www/${NAME}"
-  
+
   echo ""
-  echo "  ── Tenant: ${NAME} ──"
-  echo "     Domain: ${DOMAIN}"
-  echo "     Port:   ${PORT}"
-  echo "     DB:     ${DB_NAME}"
-  echo "     Dir:    ${APP_DIR}"
-  
-  # Clone fresh
+  echo "  ── ${NAME} ──"
+  echo "     Domain: ${DOMAIN} | Port: ${PORT} | DB: ${DB_NAME} | Branch: ${BRANCH}"
+
   rm -rf "${APP_DIR}"
-  git clone --depth 1 "${REPO}" "${APP_DIR}" > /dev/null 2>&1
+  git clone --depth 1 --branch "${BRANCH}" "${REPO}" "${APP_DIR}" > /dev/null 2>&1
   cd "${APP_DIR}"
-  echo "     ✓ Cloned"
-  
-  # Create .env with UNIQUE database
+  echo "     ✓ Cloned (branch: ${BRANCH})"
+
   cat > .env <<EOT
 DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}?schema=public"
 NEXT_PUBLIC_APP_URL="http://${DOMAIN}"
 EOT
-  echo "     ✓ .env created (DB=${DB_NAME})"
-  
-  # Install & build
+  echo "     ✓ .env created"
+
   npm install --omit=dev > /dev/null 2>&1
-  echo "     ✓ npm install done"
-  
+  echo "     ✓ npm install"
+
   npx prisma generate > /dev/null 2>&1
   npx prisma db push --accept-data-loss > /dev/null 2>&1
   echo "     ✓ Prisma schema pushed"
-  
-  # Seed admin users
+
   node scripts/create-admin-users.js 2>&1 | sed 's/^/     /'
-  
-  # Build
+
   npm run build > /dev/null 2>&1
-  echo "     ✓ Next.js built"
-  
-  # Start PM2 on unique port
+  echo "     ✓ Built"
+
   pm2 start npm --name "${NAME}" -- start -- -p "${PORT}"
-  echo "     ✓ PM2 started on port ${PORT}"
-  
-  # Create Nginx server block
+  echo "     ✓ PM2 started (port ${PORT})"
+
   cat > "/etc/nginx/sites-available/${NAME}" <<EOT
 server {
     listen 80;
@@ -144,8 +152,7 @@ EOT
   echo "     ✓ Nginx configured"
 done
 
-# ── Step 5: Also serve the IP address via client1 ──────────────────────────
-# Add the VPS IP as a server_name for client1 so you can access it by IP
+# ── Step 6: Default IP access ──────────────────────────────────────────────
 VPS_IP=$(curl -s ifconfig.me 2>/dev/null || echo "88.222.244.185")
 cat > /etc/nginx/sites-available/default-ip <<EOT
 server {
@@ -153,7 +160,7 @@ server {
     server_name ${VPS_IP};
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:3002;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -165,9 +172,9 @@ EOT
 ln -sf /etc/nginx/sites-available/default-ip /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
-# ── Step 6: Finalize ────────────────────────────────────────────────────────
+# ── Step 7: Finalize ────────────────────────────────────────────────────────
 echo ""
-echo ">>> Step 5: Finalizing..."
+echo ">>> Step 6: Finalizing..."
 nginx -t && systemctl restart nginx
 pm2 save
 pm2 startup 2>/dev/null | tail -1 | bash 2>/dev/null || true
@@ -178,13 +185,17 @@ echo "============================================="
 echo "  DEPLOYMENT COMPLETE!"
 echo "============================================="
 echo ""
-for TENANT in "${TENANTS[@]}"; do
-  IFS=':' read -r NAME PORT DB_NAME DOMAIN <<< "$TENANT"
-  echo "  ✓ ${NAME}: http://${DOMAIN} (port ${PORT}, db: ${DB_NAME})"
+for ENV in "${ENVS[@]}"; do
+  IFS=':' read -r NAME PORT DB_NAME DOMAIN BRANCH <<< "$ENV"
+  echo "  ✓ ${NAME}: http://${DOMAIN} (port ${PORT}, db: ${DB_NAME}, branch: ${BRANCH})"
 done
 echo ""
-echo "  ✓ IP access: http://${VPS_IP} → client1"
+echo "  ✓ IP access: http://${VPS_IP} → prod"
 echo ""
-echo "  Login: Techno / kundanrajesh"
-echo "         admin  / shaswat"
+echo "  Login:  Techno / kundanrajesh"
+echo "          admin  / shaswat"
+echo ""
+echo "  To add a client tenant:"
+echo "  bash /var/www/prod/scripts/add-client.sh <company> <port>"
+echo "  Example: bash /var/www/prod/scripts/add-client.sh tatasteel 3003"
 echo "============================================="
