@@ -76,12 +76,23 @@ export function MetricCard({
                             return progressItems.map((item: MetricProgressItem, i: number) => {
                                 const pct = (Math.max(0, item.value) / total) * 100;
                                 if (pct === 0) return null;
+
+                                const formattedVal = new Intl.NumberFormat("en-IN", {
+                                    maximumFractionDigits: 1,
+                                    // if the card value is INR formatted, we might want to guess to prefix ₹, 
+                                    // but let's just use standard formatting for the absolute number since 
+                                    // some cards are 'qty' or '%' rather than money
+                                }).format(item.value);
+
+                                const displayLabel = item.label ? `${item.label}: ` : "";
+                                const tooltipText = `${displayLabel}${pct.toFixed(1)}% (${formattedVal})`;
+
                                 return (
                                     <div
                                         key={i}
                                         style={{ width: `${pct}%` }}
                                         className={item.colorClass}
-                                        title={item.label ? `${item.label}: ${item.value}` : undefined}
+                                        title={tooltipText}
                                     />
                                 );
                             });
