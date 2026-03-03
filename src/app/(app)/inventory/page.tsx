@@ -109,6 +109,12 @@ type ScrapVendor = {
   name: string;
 };
 
+type Warehouse = {
+  id: string;
+  code: string;
+  name: string;
+};
+
 type ScrapSaleLineForm = {
   skuId: string;
   quantity: string;
@@ -176,12 +182,14 @@ function formatMovementSource(referenceType?: string | null, referenceId?: strin
 }
 
 export default function InventoryPage() {
-  const [balances, setBalances] = useState<StockBalance[]>([]);
-  const [ledger, setLedger] = useState<StockLedger[]>([]);
+  const [rawBalances, setRawBalances] = useState<StockBalance[]>([]);
+  const [rawLedger, setRawLedger] = useState<StockLedger[]>([]);
   const [scrapSales, setScrapSales] = useState<ScrapSale[]>([]);
   const [rawBatches, setRawBatches] = useState<RawMaterialBatch[]>([]);
   const [scrapVendors, setScrapVendors] = useState<ScrapVendor[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>("ALL");
   const [selectedZoneId, setSelectedZoneId] = useState<string>("ALL");
   const [cycleOpen, setCycleOpen] = useState(false);
   const [cycleZoneId, setCycleZoneId] = useState("");
@@ -189,6 +197,13 @@ export default function InventoryPage() {
   const [cycleQty, setCycleQty] = useState("");
   const [cycleNotes, setCycleNotes] = useState("");
   const [cycleSubmitting, setCycleSubmitting] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferSkuId, setTransferSkuId] = useState("");
+  const [transferFromZoneId, setTransferFromZoneId] = useState("");
+  const [transferToZoneId, setTransferToZoneId] = useState("");
+  const [transferQty, setTransferQty] = useState("");
+  const [transferNotes, setTransferNotes] = useState("");
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
   const [scrapBuyerName, setScrapBuyerName] = useState("");
   const [scrapVendorId, setScrapVendorId] = useState("");
   const [scrapSaleDate, setScrapSaleDate] = useState(new Date().toISOString().slice(0, 10));
@@ -205,18 +220,20 @@ export default function InventoryPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [balanceData, ledgerData, rawBatchData, scrapData, vendorData] = await Promise.all([
+      const [balanceData, ledgerData, rawBatchData, scrapData, vendorData, warehouseData] = await Promise.all([
         apiGet<StockBalance[]>("/api/stock/snapshot/by-zone"),
         apiGet<StockLedger[]>("/api/stock/ledger?limit=50"),
         apiGet<RawMaterialBatch[]>("/api/raw-batches").catch(() => []),
         apiGet<ScrapSale[]>("/api/scrap-sales").catch(() => []),
-        apiGet<ScrapVendor[]>("/api/vendors?vendorType=SCRAP").catch(() => [])
+        apiGet<ScrapVendor[]>("/api/vendors?vendorType=SCRAP").catch(() => []),
+        apiGet<Warehouse[]>("/api/warehouses").catch(() => [])
       ]);
-      setBalances(balanceData);
-      setLedger(ledgerData);
+      setRawBalances(balanceData);
+      setRawLedger(ledgerData);
       setRawBatches(Array.isArray(rawBatchData) ? rawBatchData : []);
       setScrapSales(Array.isArray(scrapData) ? scrapData : []);
       setScrapVendors(Array.isArray(vendorData) ? vendorData : []);
+      setWarehouses(Array.isArray(warehouseData) ? warehouseData : []);
     } finally {
       setLoading(false);
     }
@@ -231,6 +248,21 @@ export default function InventoryPage() {
       .then((data) => setIsAdmin(Boolean(data.isAdmin)))
       .catch(() => setIsAdmin(false));
   }, []);
+
+  const selectedWarehouse = useMemo(
+    () => warehouses.find((w) => w.id === selectedWarehouseId) ?? null,
+    [warehouses, selectedWarehouseId]
+  );
+
+  const balances = useMemo(() => {
+    if (!selectedWarehouse) return rawBalances;
+    return rawBalances.filter((b) => b.zone.warehouse.code === selectedWarehouse.code);
+  }, [rawBalances, selectedWarehouse]);
+
+  const ledger = useMemo(() => {
+    if (!selectedWarehouse) return rawLedger;
+    return rawLedger.filter((l) => l.zone.warehouse.code === selectedWarehouse.code);
+  }, [rawLedger, selectedWarehouse]);
 
   const zones = useMemo(() => {
     const map = new Map<string, { id: string; label: string }>();
@@ -471,6 +503,47 @@ export default function InventoryPage() {
     }
   }, [cycleSkuOptions, cycleSkuId]);
 
+  const transferSkuOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string }>();
+    balances
+      .filter((b) => b.zone.id === transferFromZoneId && b.quantityOnHand > 0)
+      .forEach((b) => {
+        if (!map.has(b.sku.id)) {
+          map.set(b.sku.id, {
+            value: b.sku.id,
+            label: `${b.sku.code} · ${b.sku.name}`
+          });
+        }
+      });
+    return Array.from(map.values());
+  }, [balances, transferFromZoneId]);
+
+  const selectedTransferBalance = useMemo(() => {
+    return balances.find((b) => b.zone.id === transferFromZoneId && b.sku.id === transferSkuId) ?? null;
+  }, [balances, transferFromZoneId, transferSkuId]);
+
+  useEffect(() => {
+    if (!transferFromZoneId && zones.length) {
+      setTransferFromZoneId(zones[0].id);
+    }
+  }, [zones, transferFromZoneId]);
+
+  useEffect(() => {
+    if (!transferToZoneId && zones.length > 1) {
+      setTransferToZoneId(zones[1].id);
+    } else if (!transferToZoneId && zones.length) {
+      setTransferToZoneId(zones[0].id);
+    }
+  }, [zones, transferToZoneId]);
+
+  useEffect(() => {
+    if ((!transferSkuId || !transferSkuOptions.find(o => o.value === transferSkuId)) && transferSkuOptions.length) {
+      setTransferSkuId(transferSkuOptions[0].value);
+    } else if (transferSkuOptions.length === 0) {
+      setTransferSkuId("");
+    }
+  }, [transferSkuOptions, transferSkuId]);
+
   useEffect(() => {
     if (!scrapSkuOptions.length) return;
     setScrapLines((prev) =>
@@ -524,6 +597,46 @@ export default function InventoryPage() {
       push("error", error.message ?? "Failed to post cycle count");
     } finally {
       setCycleSubmitting(false);
+    }
+  };
+
+  const handleTransferSubmit = async () => {
+    if (!transferSkuId || !transferFromZoneId || !transferToZoneId) {
+      push("error", "Select SKU, source zone, and destination zone");
+      return;
+    }
+    if (transferFromZoneId === transferToZoneId) {
+      push("error", "Source and destination zones must be different");
+      return;
+    }
+    const qtyValue = Number(transferQty);
+    if (Number.isNaN(qtyValue) || qtyValue <= 0) {
+      push("error", "Transfer quantity must be greater than 0");
+      return;
+    }
+    const maxFree = selectedTransferBalance?.quantityOnHand ?? 0;
+    if (qtyValue > maxFree) {
+      push("error", "Insufficient stock in source zone. Maximum available: " + maxFree);
+      return;
+    }
+    try {
+      setTransferSubmitting(true);
+      await apiSend("/api/stock/transfers", "POST", {
+        skuId: transferSkuId,
+        fromZoneId: transferFromZoneId,
+        toZoneId: transferToZoneId,
+        quantity: qtyValue,
+        notes: transferNotes || undefined
+      });
+      push("success", "Stock transferred successfully");
+      setTransferOpen(false);
+      setTransferQty("");
+      setTransferNotes("");
+      await loadData();
+    } catch (error: any) {
+      push("error", error.message ?? "Failed to transfer stock");
+    } finally {
+      setTransferSubmitting(false);
     }
   };
 
@@ -605,19 +718,52 @@ export default function InventoryPage() {
         title="Inventory"
         subtitle="Stock health by zone with valuation and selling exposure."
         actions={
-          <Button
-            onClick={() => {
-              if (!isAdmin) {
-                push("error", "Admin permission required to run cycle counts.");
-                return;
-              }
-              setCycleOpen(true);
-            }}
-            disabled={!isAdmin}
-            title={!isAdmin ? "Admin only" : undefined}
-          >
-            Cycle Count
-          </Button>
+          <div className="flex items-center gap-4">
+            <div className="min-w-[200px]">
+              <Select
+                label="Warehouse Filter"
+                value={selectedWarehouseId}
+                onChange={(e) => {
+                  setSelectedWarehouseId(e.target.value);
+                  setSelectedZoneId("ALL");
+                  setSelectedZoneType("ALL");
+                }}
+                options={[
+                  { value: "ALL", label: "All Warehouses" },
+                  ...warehouses.map((w) => ({ value: w.id, label: `${w.code} · ${w.name}` }))
+                ]}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (!isAdmin) {
+                    push("error", "Admin permission required to transfer stock.");
+                    return;
+                  }
+                  setTransferOpen(true);
+                }}
+                disabled={!isAdmin}
+                title={!isAdmin ? "Admin only" : undefined}
+              >
+                Transfer Stock
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!isAdmin) {
+                    push("error", "Admin permission required to run cycle counts.");
+                    return;
+                  }
+                  setCycleOpen(true);
+                }}
+                disabled={!isAdmin}
+                title={!isAdmin ? "Admin only" : undefined}
+              >
+                Cycle Count
+              </Button>
+            </div>
+          </div>
         }
       />
 
@@ -1070,6 +1216,68 @@ export default function InventoryPage() {
             value={cycleNotes}
             onChange={(event) => setCycleNotes(event.target.value)}
             placeholder="Reason for adjustment"
+          />
+        </div>
+      </Modal>
+
+      <Modal
+        open={transferOpen}
+        title="Transfer Stock"
+        onClose={() => setTransferOpen(false)}
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setTransferOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleTransferSubmit} disabled={transferSubmitting || !isAdmin}>
+              {transferSubmitting ? "Transferring..." : "Confirm Transfer"}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Select
+            label="Source Zone"
+            value={transferFromZoneId}
+            onChange={(event) => setTransferFromZoneId(event.target.value)}
+            options={cycleZoneOptions}
+            required
+          />
+          <Select
+            label="SKU to Transfer"
+            value={transferSkuId}
+            onChange={(event) => setTransferSkuId(event.target.value)}
+            options={transferSkuOptions.length ? transferSkuOptions : [{ value: "", label: "No available SKUs in source zone" }]}
+            required
+          />
+          <Select
+            label="Destination Zone"
+            value={transferToZoneId}
+            onChange={(event) => setTransferToZoneId(event.target.value)}
+            options={cycleZoneOptions}
+            required
+          />
+          <Input
+            label="Available Quantity"
+            value={
+              selectedTransferBalance
+                ? `${formatQty(selectedTransferBalance.quantityOnHand, selectedTransferBalance.sku.unit)}`
+                : "0"
+            }
+            readOnly
+          />
+          <Input
+            label="Transfer Quantity"
+            type="number"
+            value={transferQty}
+            onChange={(event) => setTransferQty(event.target.value)}
+            required
+          />
+          <Input
+            label="Notes / Reference"
+            value={transferNotes}
+            onChange={(event) => setTransferNotes(event.target.value)}
+            placeholder="Reason for transfer"
           />
         </div>
       </Modal>

@@ -1,19 +1,6 @@
 {
+  "/page": "app/page.js",
   "/api/active-user/route": "app/api/active-user/route.js",
-  "/api/auth/logout/route": "app/api/auth/logout/route.js",
-  "/login/page": "app/login/page.js",
   "/api/dashboard/route": "app/api/dashboard/route.js",
-  "/api/auth/login/route": "app/api/auth/login/route.js",
-  "/api/warehouses/route": "app/api/warehouses/route.js",
-  "/api/zones/route": "app/api/zones/route.js",
-  "/api/raw-skus/route": "app/api/raw-skus/route.js",
-  "/api/vendors/route": "app/api/vendors/route.js",
-  "/api/vendor-skus/route": "app/api/vendor-skus/route.js",
-  "/api/finished-skus/route": "app/api/finished-skus/route.js",
-  "/api/machines/route": "app/api/machines/route.js",
-  "/api/settings/reset-data/route": "app/api/settings/reset-data/route.js",
-  "/api/machine-skus/route": "app/api/machine-skus/route.js",
-  "/api/boms/route": "app/api/boms/route.js",
-  "/(app)/dashboard/page": "app/(app)/dashboard/page.js",
-  "/(app)/settings/page": "app/(app)/settings/page.js"
+  "/(app)/dashboard/page": "app/(app)/dashboard/page.js"
 }

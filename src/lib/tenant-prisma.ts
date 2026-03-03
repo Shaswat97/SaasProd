@@ -1,32 +1,19 @@
 import { PrismaClient } from "@prisma/client";
 import { resolveTenant, type ResolvedTenant } from "@/lib/tenant";
 
-type PrismaCache = Map<string, PrismaClient>;
+const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 
-const globalForTenant = globalThis as unknown as { tenantPrisma?: PrismaCache };
-const cache = globalForTenant.tenantPrisma ?? new Map<string, PrismaClient>();
+export const prisma = globalForPrisma.prisma ?? new PrismaClient({ log: ["error", "warn"] });
 
 if (process.env.NODE_ENV !== "production") {
-  globalForTenant.tenantPrisma = cache;
-}
-
-function getCachedClient(tenant: ResolvedTenant) {
-  const url = tenant.databaseUrl;
-  let client = cache.get(url);
-  if (!client) {
-    client = new PrismaClient({
-      datasources: { db: { url } },
-      log: ["error", "warn"]
-    });
-    cache.set(url, client);
-  }
-  return client;
+  globalForPrisma.prisma = prisma;
 }
 
 export async function getTenantPrisma(request?: Request): Promise<PrismaClient | null> {
   const tenant = await resolveTenant(request);
   if (!tenant) return null;
-  return getCachedClient(tenant);
+  // In the per-VPS deployment model, every request goes to the one database defined in .env
+  return prisma;
 }
 
 export async function getTenantInfo(request?: Request): Promise<ResolvedTenant | null> {
