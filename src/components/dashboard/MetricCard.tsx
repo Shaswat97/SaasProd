@@ -1,6 +1,12 @@
 import { LucideIcon, ArrowUp, ArrowDown, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+export interface MetricProgressItem {
+    value: number;
+    colorClass: string;
+    label?: string;
+}
+
 interface MetricCardProps {
     label: string;
     value: string;
@@ -11,6 +17,7 @@ interface MetricCardProps {
     icon?: LucideIcon;
     iconColor?: string; // e.g., "text-blue-500"
     className?: string;
+    progressItems?: MetricProgressItem[];
 }
 
 export function MetricCard({
@@ -23,6 +30,7 @@ export function MetricCard({
     icon: Icon,
     iconColor = "text-primary",
     className,
+    progressItems,
 }: MetricCardProps) {
     const trendColor =
         trendDirection === "up"
@@ -58,6 +66,37 @@ export function MetricCard({
                     </div>
                 )}
             </div>
+
+            {progressItems && progressItems.length > 0 && (
+                <div className="mb-4">
+                    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+                        {(() => {
+                            const total = progressItems.reduce((sum: number, item: MetricProgressItem) => sum + Math.max(0, item.value), 0);
+                            if (total === 0) return null;
+                            return progressItems.map((item: MetricProgressItem, i: number) => {
+                                const pct = (Math.max(0, item.value) / total) * 100;
+                                if (pct === 0) return null;
+                                return (
+                                    <div
+                                        key={i}
+                                        style={{ width: `${pct}%` }}
+                                        className={item.colorClass}
+                                        title={item.label ? `${item.label}: ${item.value}` : undefined}
+                                    />
+                                );
+                            });
+                        })()}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-gray-500">
+                        {progressItems.map((item: MetricProgressItem, i: number) => item.label && item.value > 0 ? (
+                            <div key={i} className="flex items-center gap-1">
+                                <div className={cn("h-2 w-2 rounded-full border border-black/10", item.colorClass)} />
+                                <span>{item.label}</span>
+                            </div>
+                        ) : null)}
+                    </div>
+                </div>
+            )}
 
             {(trend || subtext) && (
                 <div className="flex items-center gap-2 text-xs">

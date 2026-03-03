@@ -53,6 +53,13 @@ type DashboardData = {
     totalRevenue: number;
     deliveryCompletionPct: number;
     inventoryValue: number;
+    inventoryBreakdown: {
+      inUse: number;
+      free: number;
+      finished: number;
+      scrap: number;
+      other: number;
+    };
     avgOee: number;
     receivablesOutstanding: number;
     payablesOutstanding: number;
@@ -81,6 +88,7 @@ type DashboardData = {
   revenueSplit: {
     finishedRevenue: number;
     scrapRevenue: number;
+    totalRevenue: number;
     scrapSharePct: number;
     totalMargin: number;
   };
@@ -1001,6 +1009,10 @@ export default function DashboardPage() {
           subtext=""
           icon={CreditCard}
           iconColor="text-blue-500"
+          progressItems={data ? [
+            { value: data.revenueSplit.totalMargin, colorClass: "bg-green-500", label: "Income" },
+            { value: Math.max(0, data.revenueSplit.totalRevenue - data.revenueSplit.totalMargin), colorClass: "bg-red-500", label: "Cost" }
+          ] : undefined}
         />
         <MetricCard
           label="Inventory Value"
@@ -1011,6 +1023,11 @@ export default function DashboardPage() {
           subtext=""
           icon={ShoppingCart}
           iconColor="text-amber-500"
+          progressItems={data ? [
+            { value: data.cards.inventoryBreakdown.inUse, colorClass: "bg-blue-500", label: "In Use" },
+            { value: data.cards.inventoryBreakdown.free, colorClass: "bg-emerald-500", label: "Free" },
+            { value: data.cards.inventoryBreakdown.finished, colorClass: "bg-purple-500", label: "Finished" }
+          ] : undefined}
         />
         <MetricCard
           label="Receivables (Outstanding)"
@@ -1025,6 +1042,10 @@ export default function DashboardPage() {
           }
           icon={TrendingUp}
           iconColor="text-green-500"
+          progressItems={data ? [
+            { value: Math.max(0, data.cards.receivablesOutstanding - data.collections.overdueOutstanding), colorClass: "bg-blue-500", label: "On Time" },
+            { value: data.collections.overdueOutstanding, colorClass: "bg-rose-500", label: "Overdue" }
+          ] : undefined}
         />
       </div>
 
@@ -1043,6 +1064,10 @@ export default function DashboardPage() {
           }
           icon={TrendingDown}
           iconColor="text-red-500"
+          progressItems={data ? [
+            { value: Math.max(0, data.cards.payablesOutstanding - data.payables.overdueOutstanding), colorClass: "bg-amber-500", label: "On Time" },
+            { value: data.payables.overdueOutstanding, colorClass: "bg-rose-500", label: "Overdue" }
+          ] : undefined}
         />
         <MetricCard
           label="Avg. OEE"
@@ -1053,6 +1078,10 @@ export default function DashboardPage() {
           subtext=""
           icon={CheckCircle}
           iconColor="text-emerald-500"
+          progressItems={data ? [
+            { value: data.cards.avgOee, colorClass: "bg-emerald-500", label: "OEE" },
+            { value: Math.max(0, 100 - data.cards.avgOee), colorClass: "bg-gray-200" }
+          ] : undefined}
         />
         <MetricCard
           label="Delivery Completion"
@@ -1063,6 +1092,10 @@ export default function DashboardPage() {
           subtext=""
           icon={Clock}
           iconColor="text-gray-500"
+          progressItems={data ? [
+            { value: data.cards.deliveryCompletionPct, colorClass: "bg-indigo-500", label: "Delivered" },
+            { value: Math.max(0, 100 - data.cards.deliveryCompletionPct), colorClass: "bg-gray-200" }
+          ] : undefined}
         />
         <MetricCard
           label="Unbilled Delivered Value"
@@ -1091,6 +1124,10 @@ export default function DashboardPage() {
           }
           icon={FileText}
           iconColor="text-indigo-500"
+          progressItems={data ? [
+            { value: data.cards.openOrderToInvoiceConversionPct, colorClass: "bg-purple-500", label: "Converted" },
+            { value: Math.max(0, 100 - data.cards.openOrderToInvoiceConversionPct), colorClass: "bg-gray-200" }
+          ] : undefined}
         />
         <MetricCard
           label="Collection Efficiency %"
@@ -1105,6 +1142,10 @@ export default function DashboardPage() {
           }
           icon={CreditCard}
           iconColor="text-emerald-500"
+          progressItems={data ? [
+            { value: data.cards.collectionEfficiencyPct, colorClass: "bg-emerald-500", label: "Collected" },
+            { value: Math.max(0, 100 - data.cards.collectionEfficiencyPct), colorClass: "bg-gray-200" }
+          ] : undefined}
         />
       </div>
 

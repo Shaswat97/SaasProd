@@ -371,7 +371,24 @@ export async function GET(request: Request) {
     current.totalCost += sign * entry.totalCost;
     stockAsOfBySkuZone.set(key, current);
   });
-  const inventoryValue = Array.from(stockAsOfBySkuZone.values()).reduce((sum, row) => sum + row.totalCost, 0);
+  const inventoryBreakdown = {
+    inUse: 0,
+    free: 0,
+    finished: 0,
+    scrap: 0,
+    other: 0
+  };
+  const inventoryValue = Array.from(stockAsOfBySkuZone.values()).reduce((sum, row) => {
+    const cost = row.totalCost;
+    if (cost > 0) {
+      if (row.zoneType === "WIP") inventoryBreakdown.inUse += cost;
+      else if (row.zoneType === "RAW_MATERIAL") inventoryBreakdown.free += cost;
+      else if (row.zoneType === "FINISHED") inventoryBreakdown.finished += cost;
+      else if (row.zoneType === "SCRAP") inventoryBreakdown.scrap += cost;
+      else inventoryBreakdown.other += cost;
+    }
+    return sum + cost;
+  }, 0);
 
   const avgOee = productionLogs.length
     ? productionLogs.reduce((sum, log) => sum + (log.oeePct ?? 0), 0) / productionLogs.length
@@ -540,8 +557,8 @@ export async function GET(request: Request) {
     yieldPct:
       productionYieldTotals.good + productionYieldTotals.reject + productionYieldTotals.scrap > 0
         ? (productionYieldTotals.good /
-            (productionYieldTotals.good + productionYieldTotals.reject + productionYieldTotals.scrap)) *
-          100
+          (productionYieldTotals.good + productionYieldTotals.reject + productionYieldTotals.scrap)) *
+        100
         : 0,
     bySku: Array.from(productionYieldBySkuMap.values())
       .map((row) => ({
@@ -615,9 +632,9 @@ export async function GET(request: Request) {
   const openSkuIds = Array.from(openBySkuMap.keys());
   const routingRows = openSkuIds.length
     ? await prisma.routing.findMany({
-        where: { companyId, finishedSkuId: { in: openSkuIds }, deletedAt: null },
-        include: { steps: { include: { machine: true } } }
-      })
+      where: { companyId, finishedSkuId: { in: openSkuIds }, deletedAt: null },
+      include: { steps: { include: { machine: true } } }
+    })
     : [];
   const bestStepBySku = new Map<
     string,
@@ -1239,6 +1256,7 @@ export async function GET(request: Request) {
       totalRevenue,
       deliveryCompletionPct,
       inventoryValue,
+      inventoryBreakdown,
       avgOee,
       receivablesOutstanding: totalReceivable,
       payablesOutstanding: totalPayable,
@@ -1255,12 +1273,12 @@ export async function GET(request: Request) {
       rejectPct:
         productionYield.goodQty + productionYield.rejectQty + productionYield.scrapQty > 0
           ? (productionYield.rejectQty / (productionYield.goodQty + productionYield.rejectQty + productionYield.scrapQty)) *
-            100
+          100
           : 0,
       scrapPct:
         productionYield.goodQty + productionYield.rejectQty + productionYield.scrapQty > 0
           ? (productionYield.scrapQty / (productionYield.goodQty + productionYield.rejectQty + productionYield.scrapQty)) *
-            100
+          100
           : 0
     },
     revenueSplit,
