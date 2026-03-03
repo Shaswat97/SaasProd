@@ -69,34 +69,61 @@ export function MetricCard({
 
             {progressItems && progressItems.length > 0 && (
                 <div className="mb-4">
-                    <div className="flex h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
-                        {(() => {
-                            const total = progressItems.reduce((sum: number, item: MetricProgressItem) => sum + Math.max(0, item.value), 0);
-                            if (total === 0) return null;
-                            return progressItems.map((item: MetricProgressItem, i: number) => {
-                                const pct = (Math.max(0, item.value) / total) * 100;
-                                if (pct === 0) return null;
+                    <div className="relative group h-1.5 w-full">
+                        <div className="absolute inset-0 flex h-full w-full overflow-hidden rounded-full bg-gray-100">
+                            {(() => {
+                                const total = progressItems.reduce((sum: number, item: MetricProgressItem) => sum + Math.max(0, item.value), 0);
+                                if (total === 0) return null;
+                                return progressItems.map((item: MetricProgressItem, i: number) => {
+                                    const pct = (Math.max(0, item.value) / total) * 100;
+                                    if (pct === 0) return null;
+                                    return (
+                                        <div
+                                            key={i}
+                                            style={{ width: `${pct}%` }}
+                                            className={cn("h-full hover:brightness-110 cursor-pointer transition-all", item.colorClass)}
+                                        />
+                                    );
+                                });
+                            })()}
+                        </div>
 
-                                const formattedVal = new Intl.NumberFormat("en-IN", {
-                                    maximumFractionDigits: 1,
-                                    // if the card value is INR formatted, we might want to guess to prefix ₹, 
-                                    // but let's just use standard formatting for the absolute number since 
-                                    // some cards are 'qty' or '%' rather than money
-                                }).format(item.value);
+                        {/* Custom Tooltips Overlay */}
+                        <div className="absolute inset-0 h-full w-full pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
+                            {(() => {
+                                const total = progressItems.reduce((sum: number, item: MetricProgressItem) => sum + Math.max(0, item.value), 0);
+                                if (total === 0) return null;
+                                let runningLeft = 0;
 
-                                const displayLabel = item.label ? `${item.label}: ` : "";
-                                const tooltipText = `${displayLabel}${pct.toFixed(1)}% (${formattedVal})`;
+                                return progressItems.map((item: MetricProgressItem, i: number) => {
+                                    const pct = (Math.max(0, item.value) / total) * 100;
+                                    if (pct === 0) return null;
 
-                                return (
-                                    <div
-                                        key={i}
-                                        style={{ width: `${pct}%` }}
-                                        className={item.colorClass}
-                                        title={tooltipText}
-                                    />
-                                );
-                            });
-                        })()}
+                                    const centerPos = runningLeft + (pct / 2);
+                                    runningLeft += pct;
+
+                                    const formattedVal = new Intl.NumberFormat("en-IN", {
+                                        maximumFractionDigits: 1,
+                                    }).format(item.value);
+
+                                    const displayLabel = item.label ? `${item.label}: ` : "";
+                                    const tooltipText = `${displayLabel}${pct.toFixed(1)}% (₹${formattedVal})`;
+
+                                    return (
+                                        <div
+                                            key={`tt-${i}`}
+                                            style={{ left: `${centerPos}%` }}
+                                            className="absolute bottom-full mb-1 -translate-x-1/2 flex flex-col items-center"
+                                        >
+                                            <div className="px-2 py-1 bg-gray-900 text-white text-[11px] font-medium rounded shadow-sm whitespace-nowrap">
+                                                {tooltipText}
+                                            </div>
+                                            <div className="w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[4px] border-t-gray-900" />
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-gray-500">
                         {progressItems.map((item: MetricProgressItem, i: number) => item.label && item.value > 0 ? (
