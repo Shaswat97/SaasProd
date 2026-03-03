@@ -44,7 +44,7 @@ pm2 save
 pm2 startup | grep "sudo pm2" | bash || true
 
 # 7. Configure Nginx
-cat <<EOT > /etc/nginx/sites-available/client1
+cat <<'EOT' > /etc/nginx/sites-available/client1
 server {
     listen 80;
     server_name technosynergians.com www.technosynergians.com 88.222.244.185;
@@ -52,16 +52,17 @@ server {
     location / {
         proxy_pass http://localhost:3000;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
     }
 }
 EOT
 
 ln -sf /etc/nginx/sites-available/client1 /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
+systemctl disable --now apache2 2>/dev/null || true
 systemctl restart nginx
 
 # 8. Unban user's Mac IP if blocked by fail2ban
