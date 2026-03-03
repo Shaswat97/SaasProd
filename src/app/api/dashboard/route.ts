@@ -289,7 +289,7 @@ export async function GET(request: Request) {
     prisma.stockLedger.findMany({
       where: { companyId, createdAt: { lte: asOf } },
       include: {
-        sku: { select: { id: true, code: true, name: true, type: true, unit: true } },
+        sku: { select: { id: true, code: true, name: true, type: true, unit: true, sellingPrice: true } },
         zone: { select: { id: true, type: true } }
       }
     }),
@@ -346,6 +346,7 @@ export async function GET(request: Request) {
       skuCode: string;
       skuName: string;
       skuType: string;
+      skuSellingPrice: number | null;
       unit: string;
       zoneId: string;
       zoneType: string;
@@ -361,6 +362,7 @@ export async function GET(request: Request) {
       skuCode: entry.sku.code,
       skuName: entry.sku.name,
       skuType: entry.sku.type,
+      skuSellingPrice: entry.sku.sellingPrice ?? null,
       unit: entry.sku.unit,
       zoneId: entry.zoneId,
       zoneType: entry.zone.type,
@@ -379,7 +381,12 @@ export async function GET(request: Request) {
     other: 0
   };
   const inventoryValue = Array.from(stockAsOfBySkuZone.values()).reduce((sum, row) => {
-    const cost = row.totalCost;
+    let cost = row.totalCost;
+    // Value finished goods based on selling price, otherwise fallback to recorded cost
+    if (row.zoneType === "FINISHED") {
+      cost = Math.max(0, row.qty * (row.skuSellingPrice ?? 0));
+    }
+
     if (cost > 0) {
       if (row.zoneType === "WIP") inventoryBreakdown.inUse += cost;
       else if (row.zoneType === "RAW_MATERIAL") inventoryBreakdown.free += cost;

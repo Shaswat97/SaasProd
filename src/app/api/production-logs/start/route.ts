@@ -132,19 +132,18 @@ export async function POST(request: Request) {
         if (requiredBySku.size > 0) {
           const rawSkuIds = Array.from(requiredBySku.keys());
 
-          const rawBatches = await tx.rawMaterialBatch.findMany({
+          const balances = await tx.stockBalance.findMany({
             where: {
               companyId,
-              zoneId: rawZone.id,
               skuId: { in: rawSkuIds },
-              quantityRemaining: { gt: 0 }
+              quantityOnHand: { gt: 0 }
             }
           });
 
-          for (const batch of rawBatches) {
-            const req = requiredBySku.get(batch.skuId);
+          for (const bal of balances) {
+            const req = requiredBySku.get(bal.skuId);
             if (req) {
-              req.have += batch.quantityRemaining;
+              req.have += bal.quantityOnHand;
             }
           }
 

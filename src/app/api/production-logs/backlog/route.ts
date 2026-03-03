@@ -79,19 +79,13 @@ export async function GET(request: Request) {
     })
     .filter((line) => line.openQty > 0);
 
-  const rawZoneRows = await prisma.zone.findMany({
-    where: { companyId, deletedAt: null, type: "RAW_MATERIAL" },
-    select: { id: true }
-  });
-  const rawZoneIds = rawZoneRows.map((z) => z.id);
-
-  const rawBatches = await prisma.rawMaterialBatch.findMany({
-    where: { companyId, zoneId: { in: rawZoneIds }, quantityRemaining: { gt: 0 } },
-    select: { skuId: true, quantityRemaining: true }
+  const balances = await prisma.stockBalance.findMany({
+    where: { companyId, quantityOnHand: { gt: 0 } },
+    select: { skuId: true, quantityOnHand: true }
   });
   const rawStockBySku = new Map<string, number>();
-  for (const batch of rawBatches) {
-    rawStockBySku.set(batch.skuId, (rawStockBySku.get(batch.skuId) ?? 0) + batch.quantityRemaining);
+  for (const bal of balances) {
+    rawStockBySku.set(bal.skuId, (rawStockBySku.get(bal.skuId) ?? 0) + bal.quantityOnHand);
   }
 
   const finishedSkuIds = Array.from(new Set(backlog.map((line) => line.skuId)));
