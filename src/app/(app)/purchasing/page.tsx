@@ -1159,7 +1159,7 @@ export default function PurchasingPage() {
                       ),
                       actions: (
                         <div className="flex gap-1">
-                          {order.type !== "SUBCONTRACT" && isTechno && (
+                          {order.type !== "SUBCONTRACT" && (
                             <button onClick={() => handleEdit(order)} className="px-2.5 py-1 rounded-lg bg-gray-50 hover:bg-gray-100 text-xs font-medium text-gray-600 hover:text-gray-800 transition-colors border border-gray-200">Edit</button>
                           )}
                           {isTechno && (
