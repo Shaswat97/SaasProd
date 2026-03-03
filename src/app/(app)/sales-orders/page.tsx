@@ -381,20 +381,23 @@ export default function SalesOrdersPage() {
   const [chargeSubmitting, setChargeSubmitting] = useState(false);
 
   const { toasts, push, remove } = useToast();
+  const [isTechno, setIsTechno] = useState(false);
 
   async function loadData() {
     setLoading(true);
     try {
-      const [customerData, skuData, vendorData, orderData] = await Promise.all([
+      const [customerData, skuData, vendorData, orderData, userData] = await Promise.all([
         apiGet<Customer[]>("/api/customers"),
         apiGet<FinishedSku[]>("/api/finished-skus"),
         apiGet<Vendor[]>("/api/vendors"),
-        apiGet<SalesOrder[]>("/api/sales-orders")
+        apiGet<SalesOrder[]>("/api/sales-orders"),
+        apiGet<{ actorEmployeeCode: string | null }>("/api/active-user")
       ]);
       setCustomers(customerData);
       setSkus(skuData);
       setVendors(vendorData);
       setOrders(orderData);
+      setIsTechno(userData.actorEmployeeCode === "Techno");
       if (!customerId && customerData[0]) {
         setCustomerId(customerData[0].id);
         setOrderCreditDays(String(customerData[0].creditDays ?? 0));
@@ -1429,7 +1432,7 @@ export default function SalesOrdersPage() {
             <Button variant="ghost" onClick={() => { setFocusSection(null); openDetail(order.id); }}>
               View
             </Button>
-            {order.status === "QUOTE" ? (
+            {order.status === "QUOTE" && isTechno ? (
               <>
                 <Button variant="ghost" onClick={() => createDraftPoForOrder(order.id)}>
                   Draft PO
@@ -1439,7 +1442,7 @@ export default function SalesOrdersPage() {
                 </Button>
               </>
             ) : null}
-            {order.status === "CONFIRMED" ? (
+            {order.status === "CONFIRMED" && isTechno ? (
               <>
                 <Button variant="ghost" onClick={() => updateStatus(order, "production")}>
                   Start Production
@@ -1456,7 +1459,7 @@ export default function SalesOrdersPage() {
                 )}
               </>
             ) : null}
-            {order.status === "PRODUCTION" ? (
+            {order.status === "PRODUCTION" && isTechno ? (
               <Button
                 variant="ghost"
                 onClick={() => updateStatus(order, "dispatch")}
@@ -1465,7 +1468,7 @@ export default function SalesOrdersPage() {
                 Dispatch
               </Button>
             ) : null}
-            {order.status === "DISPATCH" ? (
+            {order.status === "DISPATCH" && isTechno ? (
               <Button
                 variant="ghost"
                 onClick={() => { setFocusSection("deliveries"); openDetail(order.id); }}

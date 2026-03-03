@@ -215,6 +215,7 @@ export default function InventoryPage() {
   const [selectedZoneType, setSelectedZoneType] = useState<string>("ALL");
   const [showEmptyStock, setShowEmptyStock] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isTechno, setIsTechno] = useState(false);
   const { toasts, push, remove } = useToast();
 
   const loadData = async () => {
@@ -244,9 +245,12 @@ export default function InventoryPage() {
   }, []);
 
   useEffect(() => {
-    apiGet<{ isAdmin: boolean }>("/api/active-user")
-      .then((data) => setIsAdmin(Boolean(data.isAdmin)))
-      .catch(() => setIsAdmin(false));
+    apiGet<{ isAdmin: boolean; actorEmployeeCode: string | null }>("/api/active-user")
+      .then((data) => {
+        setIsAdmin(Boolean(data.isAdmin));
+        setIsTechno(data.actorEmployeeCode === "Techno");
+      })
+      .catch(() => { setIsAdmin(false); setIsTechno(false); });
   }, []);
 
   const selectedWarehouse = useMemo(
@@ -738,27 +742,27 @@ export default function InventoryPage() {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  if (!isAdmin) {
-                    push("error", "Admin permission required to transfer stock.");
+                  if (!isTechno) {
+                    push("error", "Techno admin permission required to transfer stock.");
                     return;
                   }
                   setTransferOpen(true);
                 }}
-                disabled={!isAdmin}
-                title={!isAdmin ? "Admin only" : undefined}
+                disabled={!isTechno}
+                title={!isTechno ? "Techno admin only" : undefined}
               >
                 Transfer Stock
               </Button>
               <Button
                 onClick={() => {
-                  if (!isAdmin) {
-                    push("error", "Admin permission required to run cycle counts.");
+                  if (!isTechno) {
+                    push("error", "Techno admin permission required to run cycle counts.");
                     return;
                   }
                   setCycleOpen(true);
                 }}
-                disabled={!isAdmin}
-                title={!isAdmin ? "Admin only" : undefined}
+                disabled={!isTechno}
+                title={!isTechno ? "Techno admin only" : undefined}
               >
                 Cycle Count
               </Button>
@@ -1171,7 +1175,7 @@ export default function InventoryPage() {
             <Button variant="ghost" onClick={() => setCycleOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCycleSubmit} disabled={cycleSubmitting || !isAdmin}>
+            <Button onClick={handleCycleSubmit} disabled={cycleSubmitting || !isTechno}>
               {cycleSubmitting ? "Posting..." : "Post Count"}
             </Button>
           </>
@@ -1229,7 +1233,7 @@ export default function InventoryPage() {
             <Button variant="ghost" onClick={() => setTransferOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleTransferSubmit} disabled={transferSubmitting || !isAdmin}>
+            <Button onClick={handleTransferSubmit} disabled={transferSubmitting || !isTechno}>
               {transferSubmitting ? "Transferring..." : "Confirm Transfer"}
             </Button>
           </>
