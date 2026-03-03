@@ -75,7 +75,7 @@ echo "    ✓ .env created"
 # Step 4: Install, push schema, seed, build
 echo ""
 echo ">>> Installing dependencies..."
-npm install --omit=dev > /dev/null 2>&1
+npm install > /dev/null 2>&1
 echo "    ✓ npm install"
 
 npx prisma generate > /dev/null 2>&1

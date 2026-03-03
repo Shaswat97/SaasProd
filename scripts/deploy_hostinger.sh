@@ -115,7 +115,7 @@ NEXT_PUBLIC_APP_URL="http://${DOMAIN}"
 EOT
   echo "     ✓ .env created"
 
-  npm install --omit=dev > /dev/null 2>&1
+  npm install > /dev/null 2>&1
   echo "     ✓ npm install"
 
   npx prisma generate > /dev/null 2>&1
