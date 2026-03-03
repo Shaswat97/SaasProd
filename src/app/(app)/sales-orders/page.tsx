@@ -1432,7 +1432,7 @@ export default function SalesOrdersPage() {
             <Button variant="ghost" onClick={() => { setFocusSection(null); openDetail(order.id); }}>
               View
             </Button>
-            {order.status === "QUOTE" && isTechno ? (
+            {order.status === "QUOTE" ? (
               <>
                 <Button variant="ghost" onClick={() => createDraftPoForOrder(order.id)}>
                   Draft PO
@@ -1442,7 +1442,7 @@ export default function SalesOrdersPage() {
                 </Button>
               </>
             ) : null}
-            {order.status === "CONFIRMED" && isTechno ? (
+            {order.status === "CONFIRMED" ? (
               <>
                 <Button variant="ghost" onClick={() => updateStatus(order, "production")}>
                   Start Production
@@ -1459,7 +1459,7 @@ export default function SalesOrdersPage() {
                 )}
               </>
             ) : null}
-            {order.status === "PRODUCTION" && isTechno ? (
+            {order.status === "PRODUCTION" ? (
               <Button
                 variant="ghost"
                 onClick={() => updateStatus(order, "dispatch")}
@@ -1468,7 +1468,7 @@ export default function SalesOrdersPage() {
                 Dispatch
               </Button>
             ) : null}
-            {order.status === "DISPATCH" && isTechno ? (
+            {order.status === "DISPATCH" ? (
               <Button
                 variant="ghost"
                 onClick={() => { setFocusSection("deliveries"); openDetail(order.id); }}

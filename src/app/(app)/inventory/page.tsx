@@ -742,27 +742,27 @@ export default function InventoryPage() {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  if (!isTechno) {
-                    push("error", "Techno admin permission required to transfer stock.");
+                  if (!isAdmin) {
+                    push("error", "Admin permission required to transfer stock.");
                     return;
                   }
                   setTransferOpen(true);
                 }}
-                disabled={!isTechno}
-                title={!isTechno ? "Techno admin only" : undefined}
+                disabled={!isAdmin}
+                title={!isAdmin ? "Admin only" : undefined}
               >
                 Transfer Stock
               </Button>
               <Button
                 onClick={() => {
-                  if (!isTechno) {
-                    push("error", "Techno admin permission required to run cycle counts.");
+                  if (!isAdmin) {
+                    push("error", "Admin permission required to run cycle counts.");
                     return;
                   }
                   setCycleOpen(true);
                 }}
-                disabled={!isTechno}
-                title={!isTechno ? "Techno admin only" : undefined}
+                disabled={!isAdmin}
+                title={!isAdmin ? "Admin only" : undefined}
               >
                 Cycle Count
               </Button>
@@ -1175,7 +1175,7 @@ export default function InventoryPage() {
             <Button variant="ghost" onClick={() => setCycleOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCycleSubmit} disabled={cycleSubmitting || !isTechno}>
+            <Button onClick={handleCycleSubmit} disabled={cycleSubmitting || !isAdmin}>
               {cycleSubmitting ? "Posting..." : "Post Count"}
             </Button>
           </>
@@ -1233,7 +1233,7 @@ export default function InventoryPage() {
             <Button variant="ghost" onClick={() => setTransferOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleTransferSubmit} disabled={transferSubmitting || !isTechno}>
+            <Button onClick={handleTransferSubmit} disabled={transferSubmitting || !isAdmin}>
               {transferSubmitting ? "Transferring..." : "Confirm Transfer"}
             </Button>
           </>
