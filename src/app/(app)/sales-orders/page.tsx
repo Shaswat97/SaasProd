@@ -913,6 +913,17 @@ export default function SalesOrdersPage() {
     }
   }
 
+  async function deleteSalesOrder(order: SalesOrder) {
+    if (!window.confirm(`Delete order ${order.soNumber ?? order.id}? This action can only be undone by Techno admin.`)) return;
+    try {
+      await apiSend(`/api/sales-orders/${order.id}`, "DELETE");
+      push("success", `Order ${order.soNumber} deleted`);
+      loadData();
+    } catch (error: any) {
+      push("error", error.message ?? "Failed to delete order");
+    }
+  }
+
   async function markDelivered(orderId: string) {
     try {
       await apiSend(`/api/sales-orders/${orderId}/delivered`, "POST");
@@ -1480,6 +1491,15 @@ export default function SalesOrdersPage() {
                 Mark Delivered
               </Button>
             ) : null}
+            {isTechno && (
+              <Button
+                variant="ghost"
+                className="text-red-500 hover:text-red-700"
+                onClick={() => deleteSalesOrder(order)}
+              >
+                Delete
+              </Button>
+            )}
           </div>
         )
       };
