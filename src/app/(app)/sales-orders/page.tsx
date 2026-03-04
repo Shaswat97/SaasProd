@@ -883,9 +883,11 @@ export default function SalesOrdersPage() {
     try {
       const result = await apiSend<any>(`/api/sales-orders/${detail.id}/procure`, "POST");
       if (result && result.createdPoIds && result.createdPoIds.length === 0) {
-        push("error", "Cannot create PO: Please map preferred vendors for the missing raw materials in Master Data first.");
+        const reasons = result.skipped?.map((s: any) => s.reason).join(", ") || "unknown";
+        push("error", `Cannot create PO (${reasons}). Please map preferred vendors for the raw materials in Master Data.`);
       } else {
-        push("success", "Draft purchase order created");
+        const count = result?.createdPoIds?.length ?? 0;
+        push("success", `Draft purchase order${count > 1 ? "s" : ""} created (${result?.createdLines ?? 0} lines)`);
       }
       openDetail(detail.id);
       loadData();
@@ -898,9 +900,11 @@ export default function SalesOrdersPage() {
     try {
       const result = await apiSend<any>(`/api/sales-orders/${orderId}/procure`, "POST");
       if (result && result.createdPoIds && result.createdPoIds.length === 0) {
-        push("error", "Cannot create PO: Please map preferred vendors for the missing raw materials in Master Data first.");
+        const reasons = result.skipped?.map((s: any) => s.reason).join(", ") || "unknown";
+        push("error", `Cannot create PO (${reasons}). Please map preferred vendors for the raw materials in Master Data.`);
       } else {
-        push("success", "Draft purchase order created");
+        const count = result?.createdPoIds?.length ?? 0;
+        push("success", `Draft purchase order${count > 1 ? "s" : ""} created (${result?.createdLines ?? 0} lines)`);
       }
       openDetail(orderId);
       loadData();
