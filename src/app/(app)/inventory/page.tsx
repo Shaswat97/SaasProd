@@ -210,6 +210,16 @@ export default function InventoryPage() {
   const [scrapNotes, setScrapNotes] = useState("");
   const [scrapLines, setScrapLines] = useState<ScrapSaleLineForm[]>([{ skuId: "", quantity: "", unitPrice: "" }]);
   const [scrapSubmitting, setScrapSubmitting] = useState(false);
+
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustSkuId, setAdjustSkuId] = useState("");
+  const [adjustZoneId, setAdjustZoneId] = useState("");
+  const [adjustQty, setAdjustQty] = useState("");
+  const [adjustNotes, setAdjustNotes] = useState("");
+  const [adjustReferenceType, setAdjustReferenceType] = useState<"MANUAL_ADJUSTMENT" | "PURCHASE_ORDER" | "PRODUCTION_LOG">("MANUAL_ADJUSTMENT");
+  const [adjustReferenceId, setAdjustReferenceId] = useState("");
+  const [adjustSubmitting, setAdjustSubmitting] = useState(false);
+
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [selectedSummaryLabel, setSelectedSummaryLabel] = useState<string | null>(null);
   const [selectedZoneType, setSelectedZoneType] = useState<string>("ALL");
@@ -646,6 +656,36 @@ export default function InventoryPage() {
 
   const updateScrapLine = (index: number, patch: Partial<ScrapSaleLineForm>) => {
     setScrapLines((prev) => prev.map((line, idx) => (idx === index ? { ...line, ...patch } : line)));
+  }; const submitAdjust = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedQty = parseFloat(adjustQty);
+    if (isNaN(parsedQty) || parsedQty < 0) {
+      push("error", "Counted quantity must be 0 or more.");
+      return;
+    }
+
+    setAdjustSubmitting(true);
+    try {
+      const resp = await apiSend<{ adjusted: boolean; moveId?: string }>("/api/stock/manual-adjust", "POST", {
+        skuId: adjustSkuId,
+        zoneId: adjustZoneId,
+        countedQty: parsedQty,
+        referenceType: adjustReferenceType,
+        referenceId: adjustReferenceId || undefined,
+        notes: adjustNotes || undefined
+      });
+      if (resp.adjusted) {
+        push("success", "Stock adjusted successfully");
+        await loadData();
+      } else {
+        push("success", "No change detected in stock");
+      }
+      setAdjustOpen(false);
+    } catch (err: any) {
+      push("error", err.message ?? "Failed to adjust stock");
+    } finally {
+      setAdjustSubmitting(false);
+    }
   };
 
   const handleScrapSubmit = async () => {
@@ -872,7 +912,8 @@ export default function InventoryPage() {
                   { key: "cost", label: "Cost / Unit", align: "right" },
                   { key: "value", label: "Stock Value", align: "right" },
                   { key: "sell", label: "Sell / Unit", align: "right" },
-                  { key: "sellValue", label: "Sell Value", align: "right" }
+                  { key: "sellValue", label: "Sell Value", align: "right" },
+                  ...(isTechno ? [{ key: "action", label: "" }] : [])
                 ]}
                 rows={filteredBalances.map((balance) => {
                   const sellUnit = balance.sku.sellingPrice ?? null;
@@ -884,7 +925,23 @@ export default function InventoryPage() {
                     cost: `${currency.format(balance.costPerUnit)} / ${balance.sku.unit}`,
                     value: currency.format(balance.totalCost),
                     sell: sellUnit ? `${currency.format(sellUnit)} / ${balance.sku.unit}` : "—",
-                    sellValue: sellValue ? currency.format(sellValue) : "—"
+                    sellValue: sellValue ? currency.format(sellValue) : "—",
+                    action: isTechno ? (
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setAdjustSkuId(balance.sku.id);
+                          setAdjustZoneId(balance.zone.id);
+                          setAdjustQty(String(balance.quantityOnHand));
+                          setAdjustReferenceType("MANUAL_ADJUSTMENT");
+                          setAdjustReferenceId("");
+                          setAdjustNotes("");
+                          setAdjustOpen(true);
+                        }}
+                      >
+                        Manual Adjust
+                      </Button>
+                    ) : null
                   };
                 })}
                 emptyLabel={loading ? "Loading inventory..." : "No inventory for this view."}

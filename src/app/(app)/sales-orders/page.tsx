@@ -362,6 +362,12 @@ export default function SalesOrdersPage() {
   const [subcontractLines, setSubcontractLines] = useState<SubcontractLine[]>([]);
   const [deliveryLines, setDeliveryLines] = useState<DeliveryFormLine[]>([]);
   const [includePackagingInInvoice, setIncludePackagingInInvoice] = useState(true);
+
+  // Edit Order State (Techno-only)
+  const [isEditing, setIsEditing] = useState(false);
+  const [editNotes, setEditNotes] = useState("");
+  const [editLines, setEditLines] = useState<{ id: string; skuCode: string; skuName: string; quantity: string; unitPrice: string }[]>([]);
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [paymentInvoiceId, setPaymentInvoiceId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => {
@@ -1151,6 +1157,30 @@ export default function SalesOrdersPage() {
       push("error", error.message ?? "Failed to add additional charge");
     } finally {
       setChargeSubmitting(false);
+    }
+  }
+
+  async function submitEdit() {
+    if (!detail) return;
+    setEditSubmitting(true);
+    try {
+      const payloadLines = editLines.map((l) => ({
+        id: l.id,
+        quantity: Number(l.quantity),
+        unitPrice: Number(l.unitPrice)
+      }));
+      await apiSend(`/api/sales-orders/${detail.id}`, "PUT", {
+        notes: editNotes,
+        lines: payloadLines
+      });
+      push("success", "Order updated successfully");
+      setIsEditing(false);
+      await loadData();
+      openDetail(detail.id);
+    } catch (err: any) {
+      push("error", err.message ?? "Failed to update order");
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -1947,12 +1977,87 @@ export default function SalesOrdersPage() {
       >
         {detailLoading || !detail ? (
           <p>Loading...</p>
+        ) : isEditing ? (
+          <div className="space-y-6">
+            <div className="rounded-2xl border border-border/60 bg-bg-subtle/70 p-4">
+              <div className="flex items-center justify-between mb-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-text-muted">Edit Sales Order</p>
+                <Button variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
+              </div>
+              <div className="space-y-4">
+                <Input
+                  label="Notes"
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                />
+                <div className="space-y-3">
+                  <p className="text-sm font-medium text-text">Order Items</p>
+                  {editLines.map((line, idx) => (
+                    <div key={line.id} className="grid grid-cols-[2fr_1fr_1fr] gap-3 items-start">
+                      <div>
+                        <p className="text-sm">{line.skuCode} · {line.skuName}</p>
+                      </div>
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        min={0}
+                        value={line.quantity}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditLines((prev) => prev.map((l, i) => i === idx ? { ...l, quantity: val } : l));
+                        }}
+                      />
+                      <Input
+                        label="Unit Price"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={line.unitPrice}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setEditLines((prev) => prev.map((l, i) => i === idx ? { ...l, unitPrice: val } : l));
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end pt-4">
+                  <Button onClick={submitEdit} disabled={editSubmitting}>
+                    {editSubmitting ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
         ) : (
           <div className="space-y-6">
             <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr]">
-              <div className="rounded-2xl border border-border/60 bg-bg-subtle/70 p-4">
+              <div className="rounded-2xl border border-border/60 bg-bg-subtle/70 p-4 relative">
+                {isTechno && (
+                  <div className="absolute top-4 right-4">
+                    <Button
+                      variant="ghost"
+                      className="border border-border/60 hover:bg-bg-subtle"
+                      onClick={() => {
+                        setEditNotes(detail.notes ?? "");
+                        setEditLines(
+                          detail.lines.map((l) => ({
+                            id: l.id,
+                            skuCode: l.sku.code,
+                            skuName: l.sku.name,
+                            quantity: String(l.quantity),
+                            unitPrice: String(l.unitPrice)
+                          }))
+                        );
+                        setIsEditing(true);
+                      }}
+                    >
+                      Edit Order
+                    </Button>
+                  </div>
+                )}
                 <p className="text-xs uppercase tracking-[0.2em] text-text-muted">Overview</p>
-                <div className="mt-3 space-y-2 text-sm">
+                <div className="mt-3 space-y-2 text-sm pr-20">
                   <p>
                     <span className="text-text-muted">Customer:</span> {detail.customer.name}
                   </p>
