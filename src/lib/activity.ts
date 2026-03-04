@@ -14,7 +14,8 @@ export type ActivityInput = {
 export function getActorFromRequest(request: Request) {
   const actorName = request.headers.get("x-activity-user")?.trim() || "Admin";
   const actorEmployeeId = request.headers.get("x-activity-user-id")?.trim() || null;
-  return { actorName, actorEmployeeId };
+  const actorEmployeeCode = request.headers.get("x-activity-user-code")?.trim() || null;
+  return { actorName, actorEmployeeId, actorEmployeeCode };
 }
 
 export async function recordActivity(

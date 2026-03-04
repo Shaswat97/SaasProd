@@ -13,6 +13,7 @@ export function LogoutButton() {
       onClick={async () => {
         await fetch("/api/auth/logout", { method: "POST" });
         window.localStorage.removeItem("activeUserName");
+        window.localStorage.removeItem("activeUserCode");
         window.localStorage.removeItem("activeUserId");
         router.replace("/login");
         router.refresh();

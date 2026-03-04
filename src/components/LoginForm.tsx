@@ -34,6 +34,9 @@ export function LoginForm() {
       if (payload?.data?.employeeId) {
         window.localStorage.setItem("activeUserId", payload.data.employeeId);
       }
+      if (payload?.data?.employeeCode) {
+        window.localStorage.setItem("activeUserCode", payload.data.employeeCode);
+      }
       router.replace("/dashboard");
       router.refresh();
     } catch (err: any) {

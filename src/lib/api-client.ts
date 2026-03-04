@@ -7,6 +7,7 @@ export type ApiResponse<T> = {
 
 const STORAGE_NAME = "activeUserName";
 const STORAGE_ID = "activeUserId";
+const STORAGE_CODE = "activeUserCode";
 
 async function parseApiResponse<T>(response: Response): Promise<ApiResponse<T>> {
   const text = await response.text();
@@ -31,9 +32,11 @@ function getActivityHeaders() {
   if (typeof window === "undefined") return {};
   const actorName = window.localStorage.getItem(STORAGE_NAME);
   const actorId = window.localStorage.getItem(STORAGE_ID);
+  const actorCode = window.localStorage.getItem(STORAGE_CODE);
   const headers: Record<string, string> = {};
   if (actorName) headers["x-activity-user"] = actorName;
   if (actorId) headers["x-activity-user-id"] = actorId;
+  if (actorCode) headers["x-activity-user-code"] = actorCode;
   return headers;
 }
 
