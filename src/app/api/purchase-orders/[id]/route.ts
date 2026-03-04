@@ -55,7 +55,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   if (!parsed.success) return zodError(parsed.error);
 
   const companyId = await getDefaultCompanyId(prisma);
-  const { actorName, actorEmployeeId } = getActorFromRequest(request);
+  const { actorName, actorEmployeeId, actorEmployeeCode } = getActorFromRequest(request);
+  const isTechno = actorEmployeeCode?.toLowerCase() === "techno";
   try {
     const order = await prisma.purchaseOrder.findFirst({
       where: { id: params.id, companyId, deletedAt: null },
@@ -64,8 +65,11 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
     if (!order) return jsonError("Purchase order not found", 404);
 
-    if (!["DRAFT", "PENDING"].includes(order.status)) {
-      return jsonError("Only DRAFT or PENDING orders can be edited", 400);
+    const editableStatuses = isTechno
+      ? ["DRAFT", "PENDING", "CONFIRMED", "APPROVED"]
+      : ["DRAFT", "PENDING"];
+    if (!editableStatuses.includes(order.status)) {
+      return jsonError(`Only ${editableStatuses.join("/")} orders can be edited`, 400);
     }
 
     const lines = parsed.data.lines;
